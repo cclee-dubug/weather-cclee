@@ -6,36 +6,29 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: probe
+      - name: tiles
         run: |
           mkdir out && cd out
           G=https://gibs.earthdata.nasa.gov/wmts/epsg3857/best
-          curl -sS -m 120 -o caps.xml "$G/1.0.0/WMTSCapabilities.xml"
-          python3 - <<'PY'
-          import re, json, xml.etree.ElementTree as ET
-          NS = {"wmts": "http://www.opengis.net/wmts/1.0", "ows": "http://www.opengis.net/ows/1.1"}
-          out = []
-          for el in ET.parse("caps.xml").getroot().iter("{http://www.opengis.net/wmts/1.0}Layer"):
-              ident = el.findtext("ows:Identifier", namespaces=NS)
-              if re.search(r"Coast|Reference|Land_Water|Borders", ident or "", re.I):
-                  out.append({"id": ident, "title": el.findtext("ows:Title", namespaces=NS),
-                              "tms": [t.text for t in el.findall("wmts:TileMatrixSetLink/wmts:TileMatrixSet", NS)],
-                              "formats": [f.text for f in el.findall("wmts:Format", NS)],
-                              "templates": [r.get("template") for r in el.findall("wmts:ResourceURL", NS)]})
-          json.dump(out, open("ref_layers.json", "w"), indent=1)
-          PY
-          rm caps.xml
-          for L in Coastlines_15m Reference_Features_15m OSM_Land_Water_Map; do
-            for tms in GoogleMapsCompatible_Level13 GoogleMapsCompatible_Level12 GoogleMapsCompatible_Level9; do
-              curl -sS -m 30 -D "h_${L}_${tms}.txt" -o "${L}_${tms}_5_13_26.png" -H "Origin: https://cclee-dubug.github.io" "$G/$L/default/default/$tms/5/13/26.png" || true
-            done
-          done
-          curl -sS -m 30 -D h_cmap.txt -o /dev/null -H "Origin: https://cclee-dubug.github.io" https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml || true
-          file * > files.txt
+          L=Himawari_AHI_Band13_Clean_Infrared
+          curl -sS -m 30 -D h.txt -o /dev/null "$G/$L/default/default/GoogleMapsCompatible_Level6/0/0/0.png"
+          T=$(grep -i '^layer-time-actual' h.txt | awk '{print $2}' | tr -d '\r')
+          echo "$T" > hima_time.txt
+          get() { # z xs xe ys ye
+            for x in $(seq $2 $3); do for y in $(seq $4 $5); do
+              curl -sS -m 30 -o "hima_${1}_${x}_${y}.png" "$G/$L/default/$T/GoogleMapsCompatible_Level6/$1/$y/$x.png" &
+              curl -sS -m 30 -o "coast_${1}_${x}_${y}.png" "$G/Coastlines_15m/default/default/GoogleMapsCompatible_Level13/$1/$y/$x.png" &
+            done; wait; done
+          }
+          get 3 5 7 2 4
+          get 4 11 15 5 8
+          get 5 24 29 12 15
+          get 6 48 59 24 31
+          ls | wc -l
       - name: push
         run: |
           cd out
           git init -q -b debug-tiles
           git -c user.name=probe -c user.email=probe@example.com add -A
-          git -c user.name=probe -c user.email=probe@example.com commit -qm probe-coast
+          git -c user.name=probe -c user.email=probe@example.com commit -qm probe-preview
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" debug-tiles
