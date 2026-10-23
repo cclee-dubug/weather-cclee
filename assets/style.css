@@ -161,12 +161,15 @@ td.na { color: var(--muted); }
 .leaflet-control-layers-selector { accent-color: var(--accent); }
 
 /* 海溫色標 */
-.sst-legend {
+/* 拉高雲圖對比，讓晴空區接近全黑，以「濾色」混合後才不會讓整張地圖蒙上一層灰 */
+.leaflet-clouds-pane img { filter: contrast(1.5); }
+.layer-legend {
   background: var(--surface); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 6px 10px; font-size: 12px; line-height: 1.5; max-width: 300px;
 }
-.sst-legend[hidden] { display: none; }
-.sst-legend .muted { color: var(--muted); }
+.layer-legend[hidden] { display: none; }
+.layer-legend .muted { color: var(--muted); }
+.layer-legend hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
 /* GIBS 色標圖的文字是深色，墊白底才看得清楚 */
-.sst-legend img { display: block; width: 100%; height: auto; margin: 4px 0; background: #fff; border-radius: 4px; }
+.layer-legend img { display: block; width: 100%; height: auto; margin: 4px 0; background: #fff; border-radius: 4px; }

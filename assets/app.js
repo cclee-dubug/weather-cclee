@@ -68,11 +68,16 @@
   const esri = (service, sources) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, {
     attribution: `Tiles &copy; <a href="https://www.esri.com/">Esri</a>${sources ? ` &mdash; ${sources}` : ""}`,
   });
-  // 圖層順序（由下到上）：背景圖磚 200 → 衛星雲圖、海溫 300 → 地名標註 450 → 路徑。
-  // 各自放在獨立的 pane，切換背景時新加入的圖磚才不會蓋住海溫
+  // 圖層順序（由下到上）：背景圖磚 200 → 海溫 300 → 衛星雲圖 320 → 地名標註 450 → 路徑。
+  // 各自放在獨立的 pane，切換背景時新加入的圖磚才不會蓋住海溫與雲圖
   map.createPane("sst");
   map.getPane("sst").style.zIndex = 300;
   map.getPane("sst").style.pointerEvents = "none";
+  map.createPane("clouds");
+  map.getPane("clouds").style.zIndex = 320;
+  map.getPane("clouds").style.pointerEvents = "none";
+  // 紅外線雲圖是灰階（雲白、晴空暗），用「濾色」混合讓暗的晴空區變透明，只留下雲
+  map.getPane("clouds").style.mixBlendMode = "screen";
   map.createPane("labels");
   map.getPane("labels").style.zIndex = 450;
   map.getPane("labels").style.pointerEvents = "none";
@@ -99,38 +104,51 @@
   let sstInfo = null;
   let sstTiles = null;
   const SST_NAME = "海表面溫度";
+
+  // 衛星雲圖：日本氣象廳向日葵衛星紅外線（B13）全圓盤圖磚，每 10 分鐘一張，原生最大縮放 5
+  const HIMAWARI = "https://www.jma.go.jp/bosai/himawari/data/satimg";
+  const CLOUD_NAME = "衛星雲圖";
+  const cloudGroup = L.layerGroup();
+  let cloudTiles = null;
+  let cloudTime = null; // 最新一張的觀測時間（UTC，YYYYMMDDHHMMSS）
+  let cloudStatus = "loading";
+
   L.control.layers(
-    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup },
+    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup, [CLOUD_NAME]: cloudGroup },
     { position: "topright", collapsed: false },
   ).addTo(map);
   if (store.get("tc-sst") !== "off") sstGroup.addTo(map);
+  if (store.get("tc-cloud") !== "off") cloudGroup.addTo(map);
 
   map.on("baselayerchange", (e) => {
     store.set("tc-basemap", Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer));
   });
   map.on("overlayadd overlayremove", (e) => {
-    if (e.layer === sstGroup) {
-      store.set("tc-sst", e.type === "overlayadd" ? "on" : "off");
-      renderSstLegend();
+    const on = e.type === "overlayadd" ? "on" : "off";
+    if (e.layer === sstGroup) store.set("tc-sst", on);
+    if (e.layer === cloudGroup) {
+      store.set("tc-cloud", on);
+      if (on === "on") refreshClouds();
     }
+    renderLegend();
   });
 
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
-  const sstLegend = L.control({ position: "bottomleft" });
-  sstLegend.onAdd = () => {
-    const div = L.DomUtil.create("div", "sst-legend");
+  const layerLegend = L.control({ position: "bottomleft" });
+  layerLegend.onAdd = () => {
+    const div = L.DomUtil.create("div", "layer-legend");
     L.DomEvent.disableClickPropagation(div);
     return div;
   };
-  sstLegend.addTo(map);
+  layerLegend.addTo(map);
 
   function updateSst(info) {
     if (!info || info.status !== "ok" || !info.template || !info.date) {
       sstInfo = null;
       sstGroup.clearLayers();
       sstTiles = null;
-      renderSstLegend();
+      renderLegend();
       return;
     }
     const url = info.template
@@ -152,22 +170,85 @@
       sstTiles.setUrl(url);
     }
     sstInfo = info;
-    renderSstLegend();
+    renderLegend();
   }
 
-  function renderSstLegend() {
-    const div = sstLegend.getContainer();
-    const on = map.hasLayer(sstGroup);
-    div.hidden = !on;
-    if (!on) return;
-    if (!sstInfo) {
-      div.innerHTML = `<b>${SST_NAME}</b><div class="muted">目前無法取得海溫資料</div>`;
-      return;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const himawariStamp = (ms) => {
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}00`;
+  };
+  const stampToIso = (t) => `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}T${t.slice(8, 10)}:${t.slice(10, 12)}:00Z`;
+  const cloudUrl = (t) => `${HIMAWARI}/${t}/fd/${t}/B13/TBB/{z}/{x}/{y}.jpg`;
+  const imageExists = (src) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = src;
+  });
+
+  async function latestCloudTime() {
+    try {
+      const res = await fetch(`${HIMAWARI}/targetTimes_fd.json`, { cache: "no-store" });
+      const t = (await res.json()).at(-1)?.basetime;
+      if (/^\d{14}$/.test(t)) return t;
+    } catch (_) { /* 瀏覽器可能因跨網域限制讀不到時間清單，改用下面的方式 */ }
+    // 從 10 分鐘前往回找，第一張存在的圖就是最新的（每天 02:40、14:40 UTC 沒有全圓盤觀測）
+    let ms = Math.floor((Date.now() - 10 * 60e3) / 600e3) * 600e3;
+    for (let i = 0; i < 12; i++, ms -= 600e3) {
+      const t = himawariStamp(ms);
+      if (await imageExists(cloudUrl(t).replace("{z}/{x}/{y}", "3/6/3"))) return t;
     }
-    const [y, m, d] = sstInfo.date.split("-");
-    div.innerHTML = `<b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析</span>` +
-      (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C" onerror="this.remove()">` : "") +
-      `<div class="muted">海溫約 26.5 °C 以上有利颱風發展或維持強度</div>`;
+    return null;
+  }
+
+  let cloudBusy = false;
+  async function refreshClouds() {
+    if (!map.hasLayer(cloudGroup) || cloudBusy) return;
+    cloudBusy = true;
+    const t = await latestCloudTime();
+    cloudBusy = false;
+    // 這次查不到但已有上一張時，繼續顯示上一張
+    cloudStatus = t || cloudTime ? "ok" : "error";
+    if (t && t !== cloudTime) {
+      cloudTime = t;
+      if (cloudTiles) {
+        cloudTiles.setUrl(cloudUrl(t));
+      } else {
+        cloudTiles = L.tileLayer(cloudUrl(t), {
+          pane: "clouds",
+          maxNativeZoom: 5,
+          // 向日葵位於東經 140.7 度上空，全圓盤以外沒有圖磚
+          bounds: [[-80, 60], [80, 222]],
+          attribution: '雲圖：<a href="https://www.jma.go.jp/bosai/map.html#contents=himawari">日本氣象廳</a>',
+        });
+        cloudGroup.addLayer(cloudTiles);
+      }
+    }
+    renderLegend();
+  }
+
+  function renderLegend() {
+    const div = layerLegend.getContainer();
+    const parts = [];
+    if (map.hasLayer(cloudGroup)) {
+      const when = { loading: "載入中…", error: "目前無法取得雲圖" }[cloudStatus] ??
+        `${fmt(stampToIso(cloudTime))} 觀測`;
+      parts.push(`<div><b>${CLOUD_NAME}</b> <span class="muted">${when}</span></div>` +
+        `<div class="muted">日本氣象廳向日葵衛星紅外線，越白代表雲頂越高越冷</div>`);
+    }
+    if (map.hasLayer(sstGroup)) {
+      if (!sstInfo) {
+        parts.push(`<div><b>${SST_NAME}</b> <span class="muted">目前無法取得海溫資料</span></div>`);
+      } else {
+        const [y, m, d] = sstInfo.date.split("-");
+        parts.push(`<div><b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析</span></div>` +
+          (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C" onerror="this.remove()">` : "") +
+          `<div class="muted">海溫約 26.5 °C 以上有利颱風發展或維持強度</div>`);
+      }
+    }
+    div.hidden = !parts.length;
+    div.innerHTML = parts.join('<hr>');
   }
 
   const layer = L.layerGroup().addTo(map);
@@ -436,6 +517,7 @@
     state.data.storms = (state.data.storms || []).sort((a, b) => intensity(b) - intensity(a));
     const storms = state.data.storms;
     updateSst(state.data.layers?.sst);
+    refreshClouds();
     let fit = false;
     if (!storms.some((s) => s.key === state.selected)) {
       state.selected = storms[0]?.key ?? null;
