@@ -1,0 +1,80 @@
+name: probe-colors
+on: push
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          set -x
+          mkdir out && cd out
+          O="Origin: https://cclee-dubug.github.io"
+          H=https://www.jma.go.jp/bosai/himawari/data/satimg
+          T=20261023130000
+          curl -sS -m 30 -D jma_tile_headers.txt -o /dev/null -H "$O" "$H/$T/fd/$T/B13/TBB/5/26/13.jpg" || true
+          curl -sS -m 30 -D jma_json_headers.txt -o targetTimes_fd.json -H "$O" "$H/targetTimes_fd.json" || true
+          for x in 25 26 27 28; do for y in 12 13 14 15; do
+            curl -sS -m 30 -o "jma_5_${x}_${y}.jpg" "$H/$T/fd/$T/B13/TBB/5/$x/$y.jpg" || true
+          done; done
+          for x in 12 13; do for y in 6 7; do
+            curl -sS -m 30 -o "jma_4_${x}_${y}.jpg" "$H/$T/fd/$T/B13/TBB/4/$x/$y.jpg" || true
+          done; done
+          # 也看看 JMA 其他產品是否存在
+          for p in B13/TBB B08/TBB B03/ALBD SND/ETC REP/ETC; do
+            code=$(curl -sS -m 30 -o /dev/null -w '%{http_code} %{content_type}' "$H/$T/fd/$T/$p/4/13/6.jpg"); echo "$p $code" >> jma_products.txt
+            code=$(curl -sS -m 30 -o /dev/null -w '%{http_code} %{content_type}' "$H/$T/fd/$T/$p/4/13/6.png"); echo "$p png $code" >> jma_products.txt
+          done
+          G=https://gibs.earthdata.nasa.gov/wmts/epsg3857/best
+          curl -sS -m 120 -o caps3857.xml "$G/1.0.0/WMTSCapabilities.xml"
+          python3 - <<'PY'
+          import re, json, xml.etree.ElementTree as ET
+          NS = {"wmts": "http://www.opengis.net/wmts/1.0", "ows": "http://www.opengis.net/ows/1.1", "xlink": "http://www.w3.org/1999/xlink"}
+          root = ET.parse("caps3857.xml").getroot()
+          out = []
+          for el in root.iter("{http://www.opengis.net/wmts/1.0}Layer"):
+              ident = el.findtext("ows:Identifier", namespaces=NS)
+              if not re.search(r"Himawari|GHRSST_L4_MUR|Geostationary|Band13|Clean_Infrared", ident or "", re.I):
+                  continue
+              d = {"id": ident, "title": el.findtext("ows:Title", namespaces=NS),
+                   "tms": [t.text for t in el.findall("wmts:TileMatrixSetLink/wmts:TileMatrixSet", NS)],
+                   "formats": [f.text for f in el.findall("wmts:Format", NS)],
+                   "templates": [r.get("template") for r in el.findall("wmts:ResourceURL", NS)],
+                   "meta": [m.get("{http://www.w3.org/1999/xlink}href") for m in el.findall("ows:Metadata", NS)],
+                   "time": []}
+              for dim in el.findall("wmts:Dimension", NS):
+                  d["time"] = {"default": dim.findtext("wmts:Default", namespaces=NS),
+                               "values": [v.text for v in dim.findall("wmts:Value", NS)][-3:]}
+              out.append(d)
+          json.dump(out, open("gibs_layers.json", "w"), indent=1)
+          PY
+          python3 - <<'PY'
+          import json, subprocess
+          for d in json.load(open("gibs_layers.json")):
+              for m in d["meta"]:
+                  if m and "colormap" in m and m.endswith(".xml"):
+                      name = m.rsplit("/", 1)[1]
+                      subprocess.run(["curl", "-sS", "-m", "60", "-o", "cmap_" + name, m])
+          PY
+          ls -la
+          rm caps3857.xml
+          L=Himawari_AHI_Band13_Clean_Infrared
+          for tms in GoogleMapsCompatible_Level6 GoogleMapsCompatible_Level7 GoogleMapsCompatible_Level8; do
+            curl -sS -m 30 -D "gibs_hima_headers_$tms.txt" -o "gibs_hima_5_13_26_$tms.png" -H "$O" "$G/$L/default/2026-10-23T13:00:00Z/$tms/5/13/26.png" || true
+          done
+          curl -sS -m 30 -D gibs_hima_default_headers.txt -o gibs_hima_default.png "$G/$L/default/default/GoogleMapsCompatible_Level6/5/13/26.png" || true
+          curl -sS -m 60 -o gibs_hima_domains.xml "$G/1.0.0/$L/default/GoogleMapsCompatible_Level6/all/2026-10-23T00:00:00Z--2026-10-24T00:00:00Z.xml" || true
+          curl -sS -m 60 -o gibs_hima_domains_any.xml "$G/1.0.0/$L/default/GoogleMapsCompatible_Level6/all/--.xml" || true
+          curl -sS -m 30 -D gibs_mur_headers.txt -o gibs_mur_4_6_13.png -H "$O" "$G/GHRSST_L4_MUR_Sea_Surface_Temperature/default/2026-10-21/GoogleMapsCompatible_Level7/4/6/13.png" || true
+          for x in 25 26 27 28; do for y in 12 13 14 15; do
+            curl -sS -m 30 -o "gibs_hima_5_${x}_${y}.png" "$G/$L/default/2026-10-23T13:00:00Z/GoogleMapsCompatible_Level6/5/$y/$x.png" || true
+          done; done
+          file * | head -80 > files.txt
+      - name: push
+        run: |
+          cd out
+          git init -q -b debug-tiles
+          git -c user.name=probe -c user.email=probe@example.com add -A
+          git -c user.name=probe -c user.email=probe@example.com commit -qm probe-colors
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" debug-tiles
