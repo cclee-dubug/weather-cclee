@@ -161,7 +161,7 @@
     }
     const [y, m, d] = sstInfo.date.split("-");
     div.innerHTML = `<b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析</span>` +
-      (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C">` : "") +
+      (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C" onerror="this.remove()">` : "") +
       `<div class="muted">海溫約 26.5 °C 以上有利颱風發展或維持強度</div>`;
   }
 
