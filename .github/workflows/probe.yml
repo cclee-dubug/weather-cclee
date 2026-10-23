@@ -6,29 +6,61 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: tiles
+      - name: data
         run: |
           mkdir out && cd out
-          G=https://gibs.earthdata.nasa.gov/wmts/epsg3857/best
-          L=Himawari_AHI_Band13_Clean_Infrared
-          curl -sS -m 30 -D h.txt -o /dev/null "$G/$L/default/default/GoogleMapsCompatible_Level6/0/0/0.png"
-          T=$(grep -i '^layer-time-actual' h.txt | awk '{print $2}' | tr -d '\r')
-          echo "$T" > hima_time.txt
-          get() { # z xs xe ys ye
-            for x in $(seq $2 $3); do for y in $(seq $4 $5); do
-              curl -sS -m 30 -o "hima_${1}_${x}_${y}.png" "$G/$L/default/$T/GoogleMapsCompatible_Level6/$1/$y/$x.png" &
-              curl -sS -m 30 -o "coast_${1}_${x}_${y}.png" "$G/Coastlines_15m/default/default/GoogleMapsCompatible_Level13/$1/$y/$x.png" &
-            done; wait; done
-          }
-          get 3 5 7 2 4
-          get 4 11 15 5 8
-          get 5 24 29 12 15
-          get 6 48 59 24 31
-          ls | wc -l
+          N="https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
+          for f in 000 024; do
+            curl -sS --http1.1 -m 60 -o gfs_f$f.grib2 -w "gfs f$f %{http_code} %{size_download}\n" \
+              "$N?dir=%2Fgfs.20261023%2F06%2Fatmos&file=gfs.t06z.pgrb2.0p25.f$f&var_UGRD=on&var_VGRD=on&lev_200_mb=on&lev_850_mb=on&subregion=&toplat=55&leftlon=95&rightlon=185&bottomlat=0" >> log.txt
+          done
+          E=https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/20261023/00z/ifs/0p25/oper
+          for s in 0 24; do
+            curl -sS -m 60 -o ifs_${s}.index -w "ifs idx $s %{http_code}\n" "$E/20261023000000-${s}h-oper-fc.index" >> log.txt
+            python3 - "$s" <<'PY' >> log.txt
+          import json, subprocess, sys
+          s = sys.argv[1]
+          rows = [json.loads(l) for l in open(f"ifs_{s}.index")]
+          want = [r for r in rows if r.get("param") in ("u", "v") and r.get("levtype") == "pl" and r.get("levelist") in ("200", "850")]
+          print("ifs", s, "fields", len(rows), "want", [(r["param"], r["levelist"], r["_length"]) for r in want])
+          url = f"https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/20261023/00z/ifs/0p25/oper/20261023000000-{s}h-oper-fc.grib2"
+          with open(f"ifs_{s}.grib2", "wb") as out:
+              for r in want:
+                  a, b = r["_offset"], r["_offset"] + r["_length"] - 1
+                  data = subprocess.run(["curl", "-sS", "-m", "60", "--retry", "3", "-r", f"{a}-{b}", url], capture_output=True).stdout
+                  out.write(data)
+          print("levels sample", sorted({r.get("levelist") for r in rows if r.get("levtype") == "pl"}))
+          PY
+          done
+          curl -sS -m 60 -L -o coast.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson
+          python3 - <<'PY' >> log.txt
+          import json
+          d = json.load(open("coast.geojson"))
+          W, E, S, N = 80, 200, -15, 65
+          lines = []
+          for f in d["features"]:
+              g = f["geometry"]
+              parts = g["coordinates"] if g["type"] == "MultiLineString" else [g["coordinates"]]
+              for part in parts:
+                  cur = []
+                  for lon, lat in part:
+                      if lon < 0: lon += 360
+                      if W <= lon <= E and S <= lat <= N:
+                          cur.append([round(lon, 2), round(lat, 2)])
+                      else:
+                          if len(cur) > 1: lines.append(cur)
+                          cur = []
+                  if len(cur) > 1: lines.append(cur)
+          json.dump(lines, open("coast_wpac.json", "w"), separators=(",", ":"))
+          print("coast lines", len(lines), sum(len(l) for l in lines))
+          PY
+          rm coast.geojson
+          ls -la >> log.txt
+          cat log.txt
       - name: push
         run: |
           cd out
           git init -q -b debug-tiles
           git -c user.name=probe -c user.email=probe@example.com add -A
-          git -c user.name=probe -c user.email=probe@example.com commit -qm probe-preview
+          git -c user.name=probe -c user.email=probe@example.com commit -qm probe-maps
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" debug-tiles
