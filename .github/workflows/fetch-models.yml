@@ -16,7 +16,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +24,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 安裝 eccodes（解 ECMWF 的 BUFR 檔）
-        run: pip install --quiet eccodes==2.50.0
+      - name: 安裝 eccodes（解 BUFR／GRIB 檔）與繪圖套件
+        run: pip install --quiet eccodes==2.50.0 numpy==2.5.3 matplotlib==3.11.2
 
       - name: 取得上一版
         run: |
@@ -48,3 +48,26 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit --quiet -m "模式預報 $(date -u +%Y-%m-%dT%H:%MZ)"
           git push --quiet --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" model-data
+
+      # 颱風周圍的模式天氣圖（風切）：只在 GFS／IFS 有新的起報時重畫，同樣只保留最新一版
+      - name: 取得上一版天氣圖
+        if: always()
+        run: git clone --quiet --depth 1 --branch model-maps "https://github.com/${{ github.repository }}" maps || mkdir -p maps
+
+      - name: 繪製模式天氣圖
+        id: maps
+        if: always()
+        run: |
+          if [ -f out/models.json ]; then m=out/models.json; else m=prev.json; fi
+          python3 -m fetcher.maps "$m" maps
+
+      - name: 推到 model-maps 分支
+        if: always() && steps.maps.outputs.changed == 'true'
+        run: |
+          cd maps
+          rm -rf .git
+          git init --quiet -b model-maps
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "模式天氣圖 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push --quiet --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" model-maps

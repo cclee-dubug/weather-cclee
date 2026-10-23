@@ -12,7 +12,7 @@
     jma: { name: "日本氣象廳", short: "JMA", shape: "square", avg: "10 分鐘平均" },
     jtwc: { name: "JTWC", short: "JTWC", shape: "diamond", avg: "1 分鐘平均" },
   };
-  const AGENCY_ORDER = ["cwa", "jma", "jtwc"];
+  const { AGENCY_ORDER, fmt, esc, stormTitle, stormIds, intensity, store } = TcCommon;
   const STATUS_TEXT = { ok: "正常", no_storm: "無颱風", error: "連線失敗" };
 
   // 模式路徑另存在 model-data 分支（每小時更新、不保留歷史），從 GitHub 原始檔網址讀取
@@ -45,12 +45,6 @@
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const color = (agency) => css(`--agency-${agency}`);
 
-  const fmtTime = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-  const fmt = (iso) => (iso ? fmtTime.format(new Date(iso)) : "—");
-
   function wind(kt, ms) {
     if (state.unit === "ms") {
       const v = ms ?? (kt != null ? kt * MS_PER_KT : null);
@@ -59,23 +53,6 @@
     return kt == null ? null : Math.round(kt);
   }
   const unitText = () => (state.unit === "ms" ? "m/s" : "kt");
-  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
-  function stormTitle(s) {
-    if (s.name_zh && s.name_en) return `${s.name_zh} ${s.name_en}`;
-    if (s.name_en) return s.name_en;
-    const n = s.numbers || {};
-    if (n.jtwc) return `熱帶性低氣壓 ${n.jtwc}`;
-    // JMA 對未命名的熱帶性低氣壓用英文字母編號（例如 b）
-    return n.jma ? `熱帶性低氣壓 ${n.jma}` : "熱帶性低氣壓";
-  }
-  function stormIds(s) {
-    const n = s.numbers || {};
-    const parts = [];
-    if (n.jma && /^\d{4}$/.test(n.jma)) parts.push(`JMA ${n.jma}`);
-    if (n.jtwc) parts.push(`JTWC ${n.jtwc}`);
-    return parts.join(" · ");
-  }
 
   /* ---------- 地圖 ---------- */
 
@@ -104,10 +81,6 @@
       esri("World_Imagery", "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"),
       esriLabels("Reference/World_Boundaries_and_Places"),
     ])],
-  };
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* 無痕模式等情況忽略 */ } },
   };
   const savedBase = store.get("tc-basemap");
   (BASEMAPS[savedBase] || BASEMAPS.ocean)[1].addTo(map);
@@ -457,46 +430,7 @@
   /* ---------- 模式路徑 ---------- */
 
   const modelColor = (code) => css(`--model-${MODELS[code].family}`);
-  const DEG = Math.PI / 180;
-  function distKm(lat1, lon1, lat2, lon2) {
-    const a = Math.sin((lat2 - lat1) * DEG / 2) ** 2 +
-      Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin((lon2 - lon1) * DEG / 2) ** 2;
-    return 12742 * Math.asin(Math.sqrt(a));
-  }
-  // 官方資料中，時間最接近 t 的颱風位置（預報點與中央氣象署的過去路徑都有時間）
-  function stormPosAt(storm, t) {
-    let best = null;
-    for (const k of AGENCY_ORDER) {
-      const a = storm.agencies[k];
-      if (!a) continue;
-      for (const p of [...(a.past || []), ...(a.points || [])]) {
-        if (!p.time) continue;
-        const dt = Math.abs(Date.parse(p.time) - t);
-        if (!best || dt < best.dt) best = { dt, lat: p.lat, lon: p.lon };
-      }
-    }
-    return best;
-  }
-  const modelRef = (ms) => ms.track?.[0] || ms.mean?.[0] || ms.members?.find((m) => m.length)?.[0];
-  // 模式裡的系統與網頁上的颱風對應：英文名相同，或起報時的位置夠近（颱風移動約每小時 20 公里）
-  function matchModelStorm(code, storm) {
-    const m = state.models?.models?.[code];
-    if (!m?.storms?.length || !m.init) return null;
-    const init = Date.parse(m.init);
-    const name = (storm.name_en || "").toUpperCase();
-    let best = null;
-    for (const ms of m.storms) {
-      if (name && ms.name && ms.name.toUpperCase() === name) return ms;
-      const ref = modelRef(ms);
-      if (!ref) continue;
-      const pos = stormPosAt(storm, init + ref[0] * 3600e3);
-      if (!pos) continue;
-      const d = distKm(pos.lat, pos.lon, ref[1], ref[2]);
-      const limit = Math.min(800, 300 + 20 * pos.dt / 3600e3);
-      if (d <= limit && (!best || d < best.d)) best = { d, ms };
-    }
-    return best?.ms ?? null;
-  }
+  const matchModelStorm = (code, storm) => TcCommon.matchModelStorm(state.models?.models?.[code], storm);
 
   function modelTip(code, init, p, label) {
     const w = wind(p[3], null);
@@ -567,14 +501,6 @@
     renderLegend();
   }
 
-  // 列表排序用：目前強度，10 分鐘平均的機構優先，沒有才用 JTWC
-  function intensity(storm) {
-    for (const k of ["cwa", "jma", "jtwc"]) {
-      const v = storm.agencies[k]?.points?.[0]?.vmax_kt;
-      if (v != null) return v;
-    }
-    return 0;
-  }
   function firstEnabled(storm) {
     return AGENCY_ORDER.find((k) => state.enabled.has(k) && storm.agencies[k]?.points?.length);
   }
@@ -759,6 +685,9 @@
     $("detail").hidden = !sel;
     if (sel) {
       $("detail-title").textContent = stormTitle(sel);
+      const mapsHref = `model.html#${encodeURIComponent(sel.key)}`;
+      $("model-maps-link").href = mapsHref;
+      $("maps-tab").href = mapsHref;
       renderToggles(sel);
       renderModelToggles(sel);
       renderChart(sel);

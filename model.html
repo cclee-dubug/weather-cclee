@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模式天氣圖｜西北太平洋颱風追蹤</title>
+  <meta name="description" content="GFS 與 ECMWF IFS 在颱風周圍的模式天氣圖：去除颱風渦旋後的 200–850 hPa 環境垂直風切">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="maps-body">
+  <header class="topbar">
+    <h1>西北太平洋颱風追蹤</h1>
+    <nav class="page-tabs" aria-label="頁面">
+      <a href="./">路徑與強度</a>
+      <a href="model.html" aria-current="page">模式天氣圖</a>
+    </nav>
+    <div class="status" id="status" aria-live="polite">載入中…</div>
+  </header>
+
+  <main class="maps-page">
+    <div class="maps-controls">
+      <div class="control">
+        <span class="control-label">颱風</span>
+        <div class="storm-tabs" id="storm-tabs"></div>
+      </div>
+      <div class="control">
+        <span class="control-label">圖資</span>
+        <div class="segmented" role="group" aria-label="圖資">
+          <button type="button" aria-pressed="true">200–850 hPa 垂直風切（去除渦旋）</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="time-bar" id="time-bar" hidden>
+      <button type="button" class="icon-btn" id="prev" aria-label="上一個時間">◀</button>
+      <button type="button" class="icon-btn play" id="play" aria-label="播放">▶ 播放</button>
+      <button type="button" class="icon-btn" id="next" aria-label="下一個時間">▶</button>
+      <input type="range" id="time" min="0" max="0" value="0" aria-label="預報時間">
+      <span class="time-label" id="time-label"></span>
+    </div>
+
+    <p class="maps-empty" id="maps-empty" hidden></p>
+
+    <div class="maps-grid" id="maps-grid">
+      <figure class="map-panel" data-model="gfs">
+        <figcaption><b>NCEP GFS</b><span class="sub"></span></figcaption>
+        <div class="img-wrap"><img alt="" hidden><p class="placeholder"></p></div>
+        <p class="summary"></p>
+      </figure>
+      <figure class="map-panel" data-model="ifs">
+        <figcaption><b>ECMWF IFS</b><span class="sub"></span></figcaption>
+        <div class="img-wrap"><img alt="" hidden><p class="placeholder"></p></div>
+        <p class="summary"></p>
+      </figure>
+    </div>
+
+    <section class="maps-trend" id="trend" hidden>
+      <h3>颱風中心 0–500 公里平均風切（kt）</h3>
+      <div class="chart-wrap"><canvas id="shear-chart" aria-label="兩個模式的平均風切隨時間變化"></canvas></div>
+    </section>
+
+    <section class="maps-about">
+      <h3>這張圖怎麼看</h3>
+      <p>垂直風切是 200 hPa（約 12 公里高）與 850 hPa（約 1.5 公里高）的風向量差。風切小（藍色，約 20 kt 以下）有利颱風發展；風切大會把颱風的上下層吹歪，通常使颱風減弱。流線是風切向量的方向。</p>
+      <p>颱風本身的環流也會在颱風附近造成很大的「風切」，所以先去除颱風渦旋：把颱風中心 500 公里內（圖上虛線圓）的渦度與輻散反推成風場後扣掉（Davis et al. 2008 的方法），剩下的才是真正的環境風切。每張圖下方的平均值是虛線圓內的環境風切，與 SHIPS 強度預報模式的 SHDC 定義相同。</p>
+      <p>風切方向以「來向」表示，例如「西風切」代表高層的西風比低層強。圖的中心是各模式自己預報的颱風位置，0 到 120 小時每 6 小時一張；GFS 每 6 小時、IFS 每 12 小時更新一次。</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    模式：<a href="https://nomads.ncep.noaa.gov/" target="_blank" rel="noopener">NOAA NCEP GFS</a>、
+    <a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF 開放資料</a>（CC BY 4.0）；
+    颱風位置：日本氣象廳、交通部中央氣象署、美軍聯合颱風警報中心。模式結果僅供參考，時間皆為台灣時間。
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script src="assets/common.js"></script>
+  <script src="assets/model.js"></script>
+</body>
+</html>

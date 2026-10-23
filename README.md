@@ -28,6 +28,10 @@ GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormap
 | ECMWF IFS | 決定性 | [ECMWF 開放資料](https://www.ecmwf.int/en/forecasts/datasets/open-data)（CC BY 4.0）颱風路徑 BUFR | 每 12 小時（00Z／12Z） |
 | ECMWF EPS | 系集（平均＋51 成員） | 同上 | 每 12 小時（00Z／12Z） |
 
+**模式天氣圖**（`model.html`）：以各模式自己預報的颱風位置為中心，畫出 0 到 120 小時每 6 小時一張的天氣圖，GFS 與 IFS 依有效時間並排比較。目前有：
+
+- **200–850 hPa 環境垂直風切（去除渦旋）**：GFS 從 [NOMADS grib filter](https://nomads.ncep.noaa.gov/gribfilter.php?ds=gfs_0p25) 只下載 200、850 hPa 的 u、v；IFS 從 ECMWF 開放資料依 `.index` 以 HTTP Range 只下載這四個場。颱風中心 500 公里內的渦度與輻散用 Green 函數反推風場後扣除（Davis et al. 2008 的方法，`fetcher/vortex.py`），剩下的環境風場再相減；另算 500 公里內的平均風切（與 SHIPS 的 SHDC 定義相同）。
+
 各機構風速定義不同，同一個颱風 JTWC 的數值通常較高，不宜直接比較大小。本站資料僅供參考，防災決策請以中央氣象署發布的資訊為準。
 
 ## 運作方式
@@ -36,13 +40,15 @@ GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormap
 - `.github/workflows/fetch-data.yml`：每 30 分鐘執行一次，資料有變化時自動提交。
 - 某個來源暫時抓不到時，沿用 24 小時內上一次的資料並標示狀態，不會讓網頁整個消失。
 - `fetcher/models.py` 與 `.github/workflows/fetch-models.yml`：每小時檢查一次模式有沒有新的起報，有才更新。系集資料較大，所以存在獨立的 `model-data` 分支，每次強制推送只留最新一版，網頁從 `raw.githubusercontent.com` 讀取，repo 不會越來越大。解 ECMWF 的 BUFR 檔需要 `pip install eccodes`。
+- `fetcher/maps.py`：同一個 workflow 接著畫模式天氣圖（需要 numpy、matplotlib、eccodes），只在 GFS／IFS 有新的起報時重畫，圖片與 `index.json` 強制推送到 `model-maps` 分支，一樣只留最新一版。海岸線取自 Natural Earth 1:50m（公有領域），只留西北太平洋範圍存成 `fetcher/coast_wpac.json`。
 
 本機執行：
 
 ```bash
 CWA_API_KEY=你的授權碼 python3 -m fetcher data/latest.json
-pip install eccodes   # 只有模式資料需要
+pip install eccodes numpy matplotlib   # 只有模式資料與天氣圖需要
 python3 -m fetcher.models data/models.json data/models.json
+python3 -m fetcher.maps data/models.json maps   # 圖片輸出到 maps/
 python3 -m unittest discover -s tests
 ```
 
