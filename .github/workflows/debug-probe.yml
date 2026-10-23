@@ -1,0 +1,28 @@
+name: 診斷資料來源（暫時）
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 探測
+        run: |
+          set +e
+          D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
+          head_of() { echo "== $1"; curl -s -m 30 -A "typhoon-tracker/1.0" "$1" | sed -e 's/<[^>]*>/ /g' | tr -s ' ' | grep -v '^\s*$' | head -${2:-25}; }
+          code_of() { echo "$(curl -s -o /dev/null -m 30 -A typhoon-tracker/1.0 -w '%{http_code} %{content_type} %{size_download}' "$1") $1"; }
+          T=$(curl -s -A typhoon-tracker/1.0 https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | python3 -c "import json,sys;print(json.load(sys.stdin)[-1]['basetime'])")
+          echo "himawari latest $T"
+          for p in B13/TBB B03/ALBD REP/ETC SND/ETC; do code_of "https://www.jma.go.jp/bosai/himawari/data/satimg/$T/fd/$T/$p/4/13/6.jpg"; done
+          code_of "https://www.jma.go.jp/bosai/himawari/data/satimg/$T/fd/$T/B13/TBB/6/53/27.jpg"
+          head_of https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 40
+          head_of https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/ 20
+          head_of https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/ 30
+          head_of https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/pgrb2ap5/ 60
+          head_of https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.$D/00/atmos/ 400 | grep -i -E "track|atcf|cyclone|tcvit|storm" | head -20
+          head_of https://data.ecmwf.int/forecasts/$D/00z/ifs/0p25/oper/ 400 | grep -i -E "tf|bufr" | head -20
+          head_of https://data.ecmwf.int/forecasts/$D/00z/ifs/0p25/enfo/ 400 | grep -i -E "tf|bufr" | head -20
+          head_of https://data.ecmwf.int/forecasts/$Y/12z/ifs/0p25/enfo/ 400 | grep -i -E "tf|bufr" | head -20
