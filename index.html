@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>西北太平洋颱風追蹤</title>
+  <meta name="description" content="整合日本氣象廳、中央氣象署、JTWC 官方預報路徑與強度的免費颱風追蹤網頁">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>西北太平洋颱風追蹤</h1>
+    <div class="status" id="status" aria-live="polite">載入中…</div>
+    <div class="unit-switch" role="group" aria-label="風速單位">
+      <button type="button" data-unit="kt" aria-pressed="true">kt</button>
+      <button type="button" data-unit="ms" aria-pressed="false">m/s</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section>
+        <h2>現存熱帶氣旋</h2>
+        <ul class="storm-list" id="storm-list"></ul>
+      </section>
+
+      <section id="detail" hidden>
+        <h2 id="detail-title"></h2>
+        <div class="agency-toggles" id="agency-toggles"></div>
+        <div class="layer-toggles">
+          <label><input type="checkbox" id="show-past" checked> 過去路徑</label>
+          <label><input type="checkbox" id="show-cone"> 70% 機率圈</label>
+        </div>
+
+        <h3>強度預報 <span class="unit-label"></span></h3>
+        <div class="chart-wrap"><canvas id="intensity-chart" aria-label="各機構強度預報折線圖"></canvas></div>
+        <p class="note">JTWC 為 1 分鐘平均風速，日本氣象廳與中央氣象署為 10 分鐘平均，同一颱風 JTWC 的數值通常較高。</p>
+
+        <h3>預報數值</h3>
+        <div class="table-wrap"><table id="intensity-table"></table></div>
+      </section>
+    </aside>
+
+    <div class="map-wrap">
+      <div id="map" aria-label="颱風路徑地圖"></div>
+      <div class="map-empty" id="map-empty" hidden>目前西北太平洋沒有活躍的熱帶氣旋</div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    資料來源：<a href="https://www.jma.go.jp/bosai/map.html#contents=typhoon" target="_blank" rel="noopener">日本氣象廳</a>、
+    <a href="https://opendata.cwa.gov.tw/" target="_blank" rel="noopener">交通部中央氣象署</a>、
+    <a href="https://www.metoc.navy.mil/jtwc/jtwc.html" target="_blank" rel="noopener">美軍聯合颱風警報中心</a>。
+    本站每 30 分鐘自動更新，資料僅供參考，防災決策請以中央氣象署發布為準。時間皆為台灣時間。
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
