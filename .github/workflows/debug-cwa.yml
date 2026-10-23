@@ -1,0 +1,31 @@
+name: 診斷 CWA 連線（暫時）
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 測試不同 User-Agent 與端點
+        env:
+          KEY: ${{ secrets.CWA_API_KEY }}
+        run: |
+          probe() {
+            # 只印狀態碼與回應開頭，不印網址，避免授權碼出現在 log
+            out=$(curl -s -m 20 -A "$2" -w '\n%{http_code}' "$1" 2>&1)
+            code=$(echo "$out" | tail -1)
+            body=$(echo "$out" | head -c 120 | tr '\n' ' ')
+            echo "[$3] HTTP $code :: $body"
+          }
+          API="https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005?Authorization=${KEY}&format=JSON"
+          FILE="https://opendata.cwa.gov.tw/fileapi/v1/opendataapi/W-C0034-005?Authorization=${KEY}&format=JSON"
+          BROWSER="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          probe "$API" "typhoon-tracker/1.0 (+https://github.com; free non-commercial TC display)" "api 目前UA"
+          probe "$API" "$BROWSER" "api 瀏覽器UA"
+          probe "$API" "curl/8.5.0" "api curl"
+          probe "$FILE" "$BROWSER" "fileapi 瀏覽器UA"
+          probe "https://opendata.cwa.gov.tw/" "$BROWSER" "opendata 首頁"
+          probe "https://www.cwa.gov.tw/V8/C/P/Typhoon/TY_NEWS.html" "$BROWSER" "www 颱風頁"
+          curl -s -m 10 https://ipinfo.io/country || true
