@@ -1,0 +1,44 @@
+name: 更新颱風資料
+
+on:
+  schedule:
+    # 每 30 分鐘一次；避開整點，GitHub 在整點排程較容易延遲
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 抓取 JMA、CWA、JTWC 資料
+        env:
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+        run: python3 -m fetcher data/latest.json
+
+      # 即使三個來源全部失敗（上一步會標成失敗並寄信），仍提交檔案，讓網頁顯示各來源狀態
+      - name: 提交更新
+        if: success() || failure()
+        run: |
+          if [ -z "$(git status --porcelain -- data/)" ]; then
+            echo "資料沒有變化"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "更新颱風資料 $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i * 5))
+          done
+          exit 1

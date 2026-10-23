@@ -1,0 +1,38 @@
+# 西北太平洋颱風即時追蹤
+
+完全免費的颱風資訊網頁：整合各機構官方預報路徑與強度，以 GitHub Actions 定時抓取資料、GitHub Pages 發布，不需要伺服器。
+
+## 資料來源
+
+| 機構 | 資料 | 最大風速定義 |
+|---|---|---|
+| 日本氣象廳（JMA） | [防災情報 颱風資料](https://www.jma.go.jp/bosai/map.html#contents=typhoon) | 10 分鐘平均 |
+| 交通部中央氣象署（CWA） | [氣象資料開放平臺 W-C0034-005](https://opendata.cwa.gov.tw/dataset/warning/W-C0034-005) | 10 分鐘平均 |
+| 美軍聯合颱風警報中心（JTWC） | [JTWC 警報](https://www.metoc.navy.mil/jtwc/jtwc.html) | 1 分鐘平均 |
+
+各機構風速定義不同，同一個颱風 JTWC 的數值通常較高，不宜直接比較大小。本站資料僅供參考，防災決策請以中央氣象署發布的資訊為準。
+
+## 運作方式
+
+- `fetcher/`：Python 程式（只用標準函式庫），抓取三個來源並合併成 `data/latest.json`。
+- `.github/workflows/fetch-data.yml`：每 30 分鐘執行一次，資料有變化時自動提交。
+- 某個來源暫時抓不到時，沿用 24 小時內上一次的資料並標示狀態，不會讓網頁整個消失。
+
+本機執行：
+
+```bash
+CWA_API_KEY=你的授權碼 python3 -m fetcher data/latest.json
+python3 -m unittest discover -s tests
+```
+
+## 設定步驟
+
+1. **CWA 授權碼**：到 [氣象資料開放平臺](https://opendata.cwa.gov.tw/) 註冊會員，在會員頁取得 API 授權碼。
+   接著在這個 repo 的 **Settings → Secrets and variables → Actions → New repository secret** 新增，名稱填 `CWA_API_KEY`，值填授權碼。
+2. **啟用 GitHub Pages**：**Settings → Pages**，Source 選 **Deploy from a branch**，Branch 選 `main`、資料夾 `/ (root)`。
+3. **第一次執行**：**Actions → 更新颱風資料 → Run workflow**，之後就會自動每 30 分鐘更新。
+
+## 注意事項
+
+- GitHub 的排程可能延遲 5 到 20 分鐘，資料約為半小時到一小時內的最新版本。
+- 公開 repo 連續 60 天沒有任何提交時，GitHub 會自動停用排程。程式在資料沒變時也會每 6 小時更新一次檢查時間，避免被停用；若仍被停用，到 Actions 頁面重新啟用即可。
