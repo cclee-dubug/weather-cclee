@@ -42,8 +42,10 @@ def get_json(url: str, params: dict | None = None):
     raw = http_get(url, params)
     try:
         return json.loads(raw)
-    except ValueError as e:
-        raise FetchError(f"JSON 解析失敗：{e}") from None
+    except ValueError:
+        # 附上回應開頭方便判斷是被擋（HTML 錯誤頁）還是空回應；回應內容不含授權碼
+        head = re.sub(r"\s+", " ", raw[:160].decode("utf-8", errors="replace")).strip()
+        raise FetchError(f"回應不是 JSON（{len(raw)} bytes）：{head or '空白'}") from None
 
 
 def get_text(url: str) -> str:
