@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-23T22:44:16Z",
+ "checked_at": "2026-10-23T23:44:14Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -36,7 +36,7 @@
      "name_en": "Champi",
      "name_local": "チャンパー",
      "category": "TY",
-     "issued": "2026-10-23T22:45:00Z",
+     "issued": "2026-10-23T23:40:00Z",
      "wind_avg_min": 10,
      "past": [
       {
@@ -543,53 +543,44 @@
        "lat": 24.9,
        "lon": 122.7,
        "stage": "ts"
+      },
+      {
+       "lat": 24.9,
+       "lon": 122.9,
+       "stage": "ts"
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-10-23T22:00:00Z",
+       "time": "2026-10-23T23:00:00Z",
        "lat": 24.9,
-       "lon": 122.7,
-       "vmax_kt": 70.0,
+       "lon": 122.9,
+       "vmax_kt": 65.0,
        "vmax_ms": 35.0,
-       "gust_kt": 100.0,
-       "pres_hpa": 970.0,
+       "gust_kt": 95.0,
+       "pres_hpa": 975.0,
        "category": "TY",
        "r70_km": null,
-       "r_gale_km": 750.0,
-       "r_storm_km": 165.0
+       "r_gale_km": 650.0,
+       "r_storm_km": 110.0
       },
       {
        "tau": 1,
-       "time": "2026-10-23T23:00:00Z",
+       "time": "2026-10-24T00:00:00Z",
        "lat": 24.9,
-       "lon": 122.7,
-       "vmax_kt": 70.0,
+       "lon": 123.0,
+       "vmax_kt": 65.0,
        "vmax_ms": 35.0,
-       "gust_kt": 100.0,
-       "pres_hpa": 970.0,
+       "gust_kt": 95.0,
+       "pres_hpa": 975.0,
        "category": "TY",
        "r70_km": null,
        "r_gale_km": null,
        "r_storm_km": null
       },
       {
-       "tau": 2,
-       "time": "2026-10-24T00:00:00Z",
-       "lat": 25.4,
-       "lon": 122.8,
-       "vmax_kt": 75.0,
-       "vmax_ms": 40.0,
-       "gust_kt": 105.0,
-       "pres_hpa": 965.0,
-       "category": "TY",
-       "r70_km": 55.0,
-       "r_gale_km": null,
-       "r_storm_km": null
-      },
-      {
-       "tau": 5,
+       "tau": 4,
        "time": "2026-10-24T03:00:00Z",
        "lat": 26.0,
        "lon": 123.0,
@@ -603,7 +594,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 8,
+       "tau": 7,
        "time": "2026-10-24T06:00:00Z",
        "lat": 26.6,
        "lon": 123.2,
@@ -617,7 +608,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 11,
+       "tau": 10,
        "time": "2026-10-24T09:00:00Z",
        "lat": 27.2,
        "lon": 123.3,
@@ -631,7 +622,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 14,
+       "tau": 13,
        "time": "2026-10-24T12:00:00Z",
        "lat": 27.7,
        "lon": 123.6,
@@ -645,7 +636,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 17,
+       "tau": 16,
        "time": "2026-10-24T15:00:00Z",
        "lat": 28.2,
        "lon": 123.9,
@@ -659,7 +650,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 20,
+       "tau": 19,
        "time": "2026-10-24T18:00:00Z",
        "lat": 28.6,
        "lon": 124.1,
@@ -673,7 +664,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 23,
+       "tau": 22,
        "time": "2026-10-24T21:00:00Z",
        "lat": 29.1,
        "lon": 124.4,
@@ -687,7 +678,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 44,
+       "tau": 43,
        "time": "2026-10-25T18:00:00Z",
        "lat": 31.5,
        "lon": 127.1,
@@ -701,7 +692,7 @@
        "r_storm_km": null
       },
       {
-       "tau": 68,
+       "tau": 67,
        "time": "2026-10-26T18:00:00Z",
        "lat": 32.7,
        "lon": 136.8,
@@ -1270,14 +1261,21 @@
        "time": "2026-10-23T21:00:00Z",
        "vmax_ms": 40.0,
        "pres_hpa": 950.0
+      },
+      {
+       "lat": 24.5,
+       "lon": 122.8,
+       "time": "2026-10-23T22:00:00Z",
+       "vmax_ms": 40.0,
+       "pres_hpa": 950.0
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-10-23T22:00:00Z",
-       "lat": 24.5,
-       "lon": 122.8,
+       "time": "2026-10-23T23:00:00Z",
+       "lat": 24.6,
+       "lon": 123.0,
        "vmax_kt": 78,
        "vmax_ms": 40.0,
        "gust_kt": 97,
@@ -1993,5 +1991,5 @@
    "checked_at": "2026-10-23T21:44:14Z"
   }
  },
- "updated_at": "2026-10-23T22:44:16Z"
+ "updated_at": "2026-10-23T23:44:14Z"
 }
