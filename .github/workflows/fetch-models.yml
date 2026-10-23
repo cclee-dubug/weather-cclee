@@ -3,7 +3,7 @@ name: 更新模式預報
 on:
   schedule:
     # 每小時一次；GFS／GEFS 每 6 小時、ECMWF 每 12 小時才有新的一次起報，沒有新資料時不會推送
-    - cron: "27 * * * *"
+    - cron: "28 * * * *"
   workflow_dispatch:
 
 permissions:
