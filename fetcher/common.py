@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-USER_AGENT = "typhoon-tracker/1.0 (+https://github.com; free non-commercial TC display)"
+USER_AGENT = "typhoon-tracker/1.0"  # 氣象署防火牆會擋含網址或括號的 User-Agent（2026-10-23 實測）
 TIMEOUT = 30
 MS_PER_KT = 0.514444
 
