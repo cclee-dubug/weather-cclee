@@ -3,7 +3,7 @@ name: 更新颱風資料
 on:
   schedule:
     # 每 30 分鐘一次；避開整點，GitHub 在整點排程較容易延遲
-    - cron: "7,37 * * * *"
+    - cron: "13,43 * * * *"
   workflow_dispatch:
 
 permissions:
