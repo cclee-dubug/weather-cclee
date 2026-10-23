@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-23T10:15:47Z",
+ "checked_at": "2026-10-23T10:16:24Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -10,7 +10,7 @@
   "cwa": {
    "name": "中央氣象署",
    "status": "error",
-   "message": "JSON 解析失敗：Expecting value: line 1 column 1 (char 0)",
+   "message": "回應不是 JSON（188 bytes）：<html><head><title>Request Rejected</title></head><body>The requested URL was rejected. Please consult with your administrator.<br><br>Your support ID is: 75150",
    "count": 0
   },
   "jtwc": {
@@ -1016,5 +1016,5 @@
    }
   }
  ],
- "updated_at": "2026-10-23T10:15:47Z"
+ "updated_at": "2026-10-23T10:16:24Z"
 }
