@@ -116,6 +116,21 @@ class TestEcmwf(unittest.TestCase):
                 self.assertTrue(15 < lat < 45 and 110 < lon < 160)
                 self.assertTrue(pres is None or 900 < pres < 1020)
 
+    def test_throttled_newer_run(self):
+        oper = (FX / "ecmwf_oper_tf_sample.bufr").read_bytes()
+
+        def http_get(url):
+            if "/12z/" in url:
+                raise FetchError("HTTP 503")
+            return oper
+
+        with mock.patch.object(ecmwf, "http_get", http_get), mock.patch.object(ecmwf.time, "sleep"):
+            # 12Z 被 S3 限流：已有 00Z 就沿用，下次再試
+            self.assertIsNone(ecmwf.fetch("oper", NOW, known_init="2026-10-23T00:00:00Z"))
+            # 手上的比 00Z 舊或沒有資料：改抓 00Z
+            self.assertEqual(ecmwf.fetch("oper", NOW, known_init="2026-10-22T12:00:00Z")["init"], "2026-10-23T00:00:00Z")
+            self.assertEqual(ecmwf.fetch("oper", NOW)["init"], "2026-10-23T00:00:00Z")
+
     def test_candidate_inits(self):
         got = list(ecmwf.candidate_inits(NOW, 3))
         self.assertEqual([g.hour for g in got], [12, 0, 12])

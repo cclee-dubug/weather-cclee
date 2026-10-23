@@ -121,7 +121,7 @@ def official(storm: dict) -> bool:
     return not (num.isdigit() and int(num) >= 70)
 
 
-def _download(u: str, tries: int = 4) -> bytes:
+def _download(u: str, tries: int = 3) -> bytes:
     """S3 偶爾回 503 SlowDown，稍等再試；找不到檔案（還沒產出）直接拋 NotFound。"""
     for i in range(tries):
         try:
@@ -139,6 +139,7 @@ def _download(u: str, tries: int = 4) -> bytes:
 
 def fetch(stream: str, now: datetime, known_init: str | None = None) -> dict | None:
     """抓最新一次起報的路徑，只留西北太平洋。最新一次就是 known_init 時回傳 None（不必重抓）。"""
+    last_error = None
     for init in candidate_inits(now):
         if known_init == iso_utc(init):
             return None
@@ -147,6 +148,10 @@ def fetch(stream: str, now: datetime, known_init: str | None = None) -> dict | N
                 data = _download(url(stream, init, step))
             except NotFound:
                 continue
+            except FetchError as e:
+                # 新一次起報上傳期間，S3 對那個目錄常持續回 503，先改抓前一次（已經有就沿用），下次再試
+                last_error = e
+                break
             storms = [s for s in decode(data) if official(s) and in_wpac(next(iter(s["members"].values())))]
             return {"init": iso_utc(init), "storms": storms}
-    raise FetchError("找不到最近兩天的 ECMWF 路徑檔")
+    raise last_error or FetchError("找不到最近兩天的 ECMWF 路徑檔")
