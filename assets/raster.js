@@ -211,14 +211,16 @@
     barCache.set(key, url);
     return url;
   }
-  function sstLegendHtml() {
-    const bar = legendBar("sst", sstRgb, SST_MIN, SST_MAX);
-    const ticks = SST_TICKS.map((t) => {
-      const cls = t === SST_MIN ? ' class="start"' : t === SST_MAX ? ' class="end"' : "";
-      return `<span${cls} style="left:${(t - SST_MIN) / (SST_MAX - SST_MIN) * 100}%">${t}</span>`;
+  // 連續色標：色條下方標數值
+  function scaleHtml(key, fn, min, max, ticks) {
+    const bar = legendBar(key, fn, min, max);
+    const labels = ticks.map((t) => {
+      const cls = t === min ? ' class="start"' : t === max ? ' class="end"' : "";
+      return `<span${cls} style="left:${(t - min) / (max - min) * 100}%">${t}</span>`;
     }).join("");
-    return `<div class="scale"><img class="bar" src="${bar}" alt=""><div class="ticks">${ticks}</div></div>`;
+    return `<div class="scale"><img class="bar" src="${bar}" alt=""><div class="ticks">${labels}</div></div>`;
   }
+  const sstLegendHtml = () => scaleHtml("sst", sstRgb, SST_MIN, SST_MAX, SST_TICKS);
   // BD 色標每一段等寬（實際溫度範圍差很多，照比例畫會擠在一起），分段處標溫度
   function bdLegendHtml() {
     const seg = (fn, a, b, key) => `<img class="seg" src="${legendBar(key, fn, a, b, 24)}" alt="">`;
@@ -292,15 +294,13 @@
     return { lat0, lon0, nLat, nLon, cell: DENSITY_CELL, prob, members: n };
   }
 
-  // 分級：5–10、10–20、20–40、40–60、60–80、80–100%
-  const DENSITY_BINS = [0.05, 0.1, 0.2, 0.4, 0.6, 0.8];
-  const DENSITY_ALPHA = [0.45, 0.55, 0.65, 0.72, 0.8, 0.86];
-  // 單一色相由淺到深，與該模式的路徑同色系
-  const DENSITY_RAMPS = {
-    ncep: ["#fcd1dc", "#efa6ba", "#df7a9a", "#c94f7b", "#a72f5e", "#7f1843"],
-    ecmwf: ["#d9dbfc", "#b6b7f6", "#9492ec", "#766fdb", "#5b50ba", "#41378f"],
-  };
-  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  // 色階：白 → 淺藍 → 藍 → 綠 → 黃 → 橘 → 紅（0～100%）；低於 5% 不畫，較低的比例較透明，底圖仍看得到
+  const DENSITY_MIN = 0.05;
+  const densityRgb = ramp([
+    [0, [255, 255, 255]], [5, [165, 212, 244]], [20, [46, 148, 223]], [24, [10, 133, 205]],
+    [40, [27, 189, 10]], [60, [240, 240, 0]], [80, [250, 108, 0]], [100, [245, 0, 0]],
+  ]);
+  const densityPaint = makeLut((pct) => [...densityRgb(pct), Math.round(255 * Math.min(0.82, 0.5 + pct / 80))], 0, 100, 0.5);
 
   const DensityLayer = L.GridLayer.extend({
     createTile(coords) {
@@ -309,7 +309,6 @@
       tile.width = size.x;
       tile.height = size.y;
       const g = this.options.grid;
-      const colors = DENSITY_RAMPS[this.options.family].map((h, i) => pack(...hexRgb(h), Math.round(DENSITY_ALPHA[i] * 255)));
       const world = size.x * 2 ** coords.z;
       const ctx = tile.getContext("2d");
       const im = ctx.createImageData(size.x, size.y);
@@ -334,10 +333,8 @@
           const k = i0 * g.nLon + j0;
           const p = (g.prob[k] * (1 - tj) + g.prob[k + 1] * tj) * (1 - ti) +
             (g.prob[k + g.nLon] * (1 - tj) + g.prob[k + g.nLon + 1] * tj) * ti;
-          if (p < DENSITY_BINS[0]) continue;
-          let b = DENSITY_BINS.length - 1;
-          while (p < DENSITY_BINS[b]) b--;
-          out[y * size.x + x] = colors[b];
+          if (p < DENSITY_MIN) continue;
+          out[y * size.x + x] = densityPaint(p * 100);
           any = true;
         }
       }
@@ -346,12 +343,7 @@
     },
   });
 
-  function densityLegendHtml(family) {
-    const labels = ["5", "10", "20", "40", "60", "80"];
-    return `<div class="density-scale">` + DENSITY_RAMPS[family].map((h, i) =>
-      `<span><i style="background:${h};opacity:${DENSITY_ALPHA[i] + 0.1}"></i>${labels[i]}</span>`).join("") +
-      `<span class="unit">%</span></div>`;
-  }
+  const densityLegendHtml = () => scaleHtml("density", densityRgb, 0, 100, [0, 20, 40, 60, 80, 100]);
 
   window.TcRaster = {
     sstLayer, bdLayer, sstLegendHtml, bdLegendHtml,

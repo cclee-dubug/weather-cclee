@@ -328,8 +328,8 @@
     if (densityInfo) {
       const meta = MODELS[densityInfo.code];
       parts.push(`<div><b>路徑密度</b> <span class="muted">${meta.short}，${fmt(densityInfo.init)} 起報</span></div>` +
-        TcRaster.densityLegendHtml(meta.family) +
-        `<div class="muted">${densityInfo.members} 個成員中，颱風中心通過該處 ${TcRaster.DENSITY_RADIUS_KM} 公里內的比例（整個預報期間）</div>`);
+        TcRaster.densityLegendHtml() +
+        `<div class="muted">${densityInfo.members} 個成員中，颱風中心通過該處 ${TcRaster.DENSITY_RADIUS_KM} 公里內的比例（%，整個預報期間，5% 以下不顯示）</div>`);
     }
     if (map.hasLayer(cloudGroup)) {
       const when = { loading: "載入中…", error: "目前無法取得雲圖" }[cloudStatus] ??
@@ -560,7 +560,7 @@
       densityInfo = null;
       const grid = ms && TcRaster.trackDensity(ms.members || [], ENSEMBLE_SIZE[code]);
       if (grid) {
-        densityLayer = new TcRaster.DensityLayer({ pane: "density", grid, family: MODELS[code].family }).addTo(map);
+        densityLayer = new TcRaster.DensityLayer({ pane: "density", grid }).addTo(map);
         densityInfo = { code, init, members: grid.members };
       }
     }

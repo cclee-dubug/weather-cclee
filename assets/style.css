@@ -199,8 +199,5 @@ td.na { color: var(--muted); }
 .layer-legend .scale .ticks span { position: absolute; top: 1px; transform: translateX(-50%); }
 .layer-legend .scale .ticks span.start { transform: none; }
 .layer-legend .scale .ticks span.end { transform: translateX(-100%); }
-.layer-legend .density-scale { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 11px; color: var(--text-2); }
-.layer-legend .density-scale span { display: inline-flex; align-items: center; gap: 3px; }
-.layer-legend .density-scale i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
 /* BD 雲圖放大超過原生解析度時保持方塊狀，分段的邊界才不會被模糊掉 */
 .leaflet-bd-pane canvas { image-rendering: pixelated; }
