@@ -8,57 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: 探測
+      - name: 探測 UCAR a-deck
         run: |
           set +e
-          D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
-          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
-          hrefs() { echo "== $1"; curl -s -m ${3:-60} -A "$BUA" -w '\n[HTTP %{http_code} %{size_download}B]\n' "$1" | grep -o -E 'href="[^"]*"|\[HTTP[^]]*\]' | sed 's/href=//' | grep -E "${2:-.}" | head -60; }
-          echo "== nomads verbose"; curl -sv -m 30 -A "$BUA" -o /dev/null https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 2>&1 | grep -E '^[<>] ' | head -30
-          hrefs https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
-          hrefs https://nomads.ncep.noaa.gov/pub/data/nccf/com/
-          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/ . 90
-          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/gfs.$D/00/ . 90
-          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/gefs.$D/00/ . 90
-          hrefs https://hurricanes.ral.ucar.edu/repository/data/adecks_open/ 'wp|sh|io|HTTP' 120
-          hrefs https://hurricanes.ral.ucar.edu/repository/data/ . 120
-      - name: 讀 ECMWF 路徑內容
-        run: |
-          D=$(date -u +%Y%m%d)
-          curl -s -o oper.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/oper/${D}000000-360h-oper-tf.bufr"
-          curl -s -o enfo.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/enfo/${D}000000-360h-enfo-tf.bufr"
-          pip install -q eccodes 2>&1 | tail -2
-          python3 - <<'PY2'
-          import eccodes
-          for fn in ("oper.bufr", "enfo.bufr"):
-              with open(fn, "rb") as f:
-                  while True:
-                      h = eccodes.codes_bufr_new_from_file(f)
-                      if h is None:
-                          break
-                      eccodes.codes_set(h, "unpack", 1)
-                      sid = eccodes.codes_get(h, "stormIdentifier").strip()
-                      name = eccodes.codes_get(h, "longStormName").strip()
-                      ns = eccodes.codes_get(h, "numberOfSubsets")
-                      n = 0
-                      while True:
-                          try:
-                              eccodes.codes_get_array(h, "#%d#timePeriod" % (n + 1)); n += 1
-                          except Exception:
-                              break
-                      lat = eccodes.codes_get_array(h, "#2#latitude")
-                      print(fn, sid, name, "subsets", ns, "periods", n, "lat0", list(lat[:3]))
-                      if sid.endswith("W") or name.upper() in ("FENGSHEN", "KALMAEGI"):
-                          for i in range(1, min(n, 8) + 1):
-                              tp = eccodes.codes_get_array(h, "#%d#timePeriod" % i)
-                              la = eccodes.codes_get_array(h, "#%d#latitude" % (i * 2 + 2))
-                              lo = eccodes.codes_get_array(h, "#%d#longitude" % (i * 2 + 2))
-                              pr = eccodes.codes_get_array(h, "#%d#pressureReducedToMeanSeaLevel" % (i + 1))
-                              ws = eccodes.codes_get_array(h, "#%d#windSpeedAt10M" % (i + 1))
-                              print("   tp", list(tp[:2]), "lat", list(la[:3]), "lon", list(lo[:3]), "p", list(pr[:3]), "w", list(ws[:3]))
-                          if fn == "oper.bufr":
-                              with open("sample_oper.bufr", "ab") as out:
-                                  out.write(eccodes.codes_get_message(h))
-                      eccodes.codes_release(h)
-          PY2
-          ls -la sample_oper.bufr && base64 -w0 sample_oper.bufr | head -c 60000; echo
+          B=https://hurricanes.ral.ucar.edu/repository/data/adecks_open
+          time curl -s -m 120 "$B/" -o list.html
+          grep -o -E 'awp[0-9]{2}2026\.dat</a>[^<]*' list.html | sed 's/<\/a>//' | tail -15
+          for f in awp292026.dat awp902026.dat awp912026.dat awp922026.dat awp932026.dat awp942026.dat awp952026.dat awp962026.dat awp972026.dat awp982026.dat awp992026.dat; do
+            code=$(curl -s -m 120 -o $f -w '%{http_code}' "$B/$f"); echo "== $f $code $(wc -c < $f 2>/dev/null)"
+            [ "$code" = 200 ] || continue
+            echo "latest DTG: $(cut -d, -f3 $f | sort | tail -1)"
+            L=$(cut -d, -f3 $f | sort | tail -1)
+            echo "techs in latest DTG:"; grep ",$L," $f | cut -d, -f5 | tr -d ' ' | sort | uniq -c | tr '\n' ' '; echo
+            echo "latest DTG per key tech:"; for t in AVNO AVNI AEMN AEMI AC00 AP01 AP30 EMX ECMF EEMN EMXI JGSM JTWC CARQ; do echo -n "$t=$(grep -E "^[^,]*,[^,]*,[^,]*,[^,]*, *$t," $f | cut -d, -f3 | sort | tail -1 | tr -d ' ') "; done; echo
+            grep -E ", *AVNO," $f | tail -3
+            grep -E ", *AP01," $f | tail -2
+          done
+          ls -la
