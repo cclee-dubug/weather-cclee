@@ -62,18 +62,51 @@
 
   /* ---------- 地圖 ---------- */
 
-  const map = L.map("map", { worldCopyJump: false, zoomSnap: 0.5 }).setView([22, 135], 4);
-  let tiles = null;
-  function setTiles() {
-    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-    if (tiles) map.removeLayer(tiles);
-    tiles = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, {
-      subdomains: "abcd", maxZoom: 10, minZoom: 3,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    }).addTo(map);
+  const map = L.map("map", { worldCopyJump: false, zoomSnap: 0.5, minZoom: 3, maxZoom: 10 }).setView([22, 135], 4);
+
+  // 背景地圖：全部免費、不需金鑰。使用者選過的會記在瀏覽器，沒選過就跟著系統深淺色
+  const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  const carto = (style) => L.tileLayer(`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png`, {
+    subdomains: "abcd", attribution: `${OSM} &copy; <a href="https://carto.com/attributions">CARTO</a>`,
+  });
+  const esri = (service, sources) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: `Tiles &copy; <a href="https://www.esri.com/">Esri</a>${sources ? ` &mdash; ${sources}` : ""}`,
+  });
+  const BASEMAPS = {
+    dark: ["深色", carto("dark_all")],
+    light: ["淺色", carto("light_all")],
+    voyager: ["彩色街道圖", carto("rastertiles/voyager")],
+    satellite: ["衛星影像", L.layerGroup([
+      esri("World_Imagery", "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"),
+      esri("Reference/World_Boundaries_and_Places"),
+    ])],
+    ocean: ["海洋與地形", L.layerGroup([
+      esri("Ocean/World_Ocean_Base", "Esri, Garmin, GEBCO, NOAA NGDC, and other contributors"),
+      esri("Ocean/World_Ocean_Reference"),
+    ])],
+  };
+  const schemeQuery = matchMedia("(prefers-color-scheme: dark)");
+  const savedBasemap = () => {
+    try { return localStorage.getItem("tc-basemap"); } catch (_) { return null; }
+  };
+  let basemap = null;
+  function setBasemap(key) {
+    if (!BASEMAPS[key]) key = schemeQuery.matches ? "dark" : "light";
+    if (basemap) map.removeLayer(basemap);
+    basemap = BASEMAPS[key][1].addTo(map);
+    basemap.bringToBack?.();
   }
-  setTiles();
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { setTiles(); render(); });
+  setBasemap(savedBasemap());
+  L.control.layers(Object.fromEntries(Object.values(BASEMAPS)), null, { position: "topright", collapsed: false }).addTo(map);
+  map.on("baselayerchange", (e) => {
+    basemap = e.layer;
+    const key = Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer);
+    try { localStorage.setItem("tc-basemap", key); } catch (_) { /* 無痕模式等情況忽略 */ }
+  });
+  schemeQuery.addEventListener("change", () => {
+    if (!BASEMAPS[savedBasemap()]) setBasemap(null);
+    render();
+  });
 
   const layer = L.layerGroup().addTo(map);
 
