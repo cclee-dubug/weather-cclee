@@ -64,49 +64,106 @@
 
   const map = L.map("map", { worldCopyJump: false, zoomSnap: 0.5, minZoom: 3, maxZoom: 10 }).setView([22, 135], 4);
 
-  // 背景地圖：全部免費、不需金鑰。使用者選過的會記在瀏覽器，沒選過就跟著系統深淺色
-  const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-  const carto = (style) => L.tileLayer(`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png`, {
-    subdomains: "abcd", attribution: `${OSM} &copy; <a href="https://carto.com/attributions">CARTO</a>`,
-  });
+  // 背景地圖：Esri 免費圖磚，不需金鑰。使用者選過的會記在瀏覽器
   const esri = (service, sources) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, {
     attribution: `Tiles &copy; <a href="https://www.esri.com/">Esri</a>${sources ? ` &mdash; ${sources}` : ""}`,
   });
+  // 地名標註放在最上層，才不會被海溫蓋住
+  map.createPane("labels");
+  map.getPane("labels").style.zIndex = 450;
+  map.getPane("labels").style.pointerEvents = "none";
+  const esriLabels = (service) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, { pane: "labels" });
   const BASEMAPS = {
-    dark: ["深色", carto("dark_all")],
-    light: ["淺色", carto("light_all")],
-    voyager: ["彩色街道圖", carto("rastertiles/voyager")],
-    satellite: ["衛星影像", L.layerGroup([
-      esri("World_Imagery", "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"),
-      esri("Reference/World_Boundaries_and_Places"),
-    ])],
     ocean: ["海洋與地形", L.layerGroup([
       esri("Ocean/World_Ocean_Base", "Esri, Garmin, GEBCO, NOAA NGDC, and other contributors"),
-      esri("Ocean/World_Ocean_Reference"),
+      esriLabels("Ocean/World_Ocean_Reference"),
+    ])],
+    satellite: ["衛星影像", L.layerGroup([
+      esri("World_Imagery", "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"),
+      esriLabels("Reference/World_Boundaries_and_Places"),
     ])],
   };
-  const schemeQuery = matchMedia("(prefers-color-scheme: dark)");
-  const savedBasemap = () => {
-    try { return localStorage.getItem("tc-basemap"); } catch (_) { return null; }
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* 無痕模式等情況忽略 */ } },
   };
-  let basemap = null;
-  function setBasemap(key) {
-    if (!BASEMAPS[key]) key = schemeQuery.matches ? "dark" : "light";
-    if (basemap) map.removeLayer(basemap);
-    basemap = BASEMAPS[key][1].addTo(map);
-    basemap.bringToBack?.();
-  }
-  setBasemap(savedBasemap());
-  L.control.layers(Object.fromEntries(Object.values(BASEMAPS)), null, { position: "topright", collapsed: false }).addTo(map);
+  const savedBase = store.get("tc-basemap");
+  (BASEMAPS[savedBase] || BASEMAPS.ocean)[1].addTo(map);
+
+  // 海表面溫度：NASA GIBS 的 GHRSST MUR 每日海溫圖磚，日期與網址樣板由 data/latest.json 提供
+  const sstGroup = L.layerGroup();
+  let sstInfo = null;
+  let sstTiles = null;
+  const SST_NAME = "海表面溫度";
+  L.control.layers(
+    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup },
+    { position: "topright", collapsed: false },
+  ).addTo(map);
+  if (store.get("tc-sst") !== "off") sstGroup.addTo(map);
+
   map.on("baselayerchange", (e) => {
-    basemap = e.layer;
-    const key = Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer);
-    try { localStorage.setItem("tc-basemap", key); } catch (_) { /* 無痕模式等情況忽略 */ }
+    store.set("tc-basemap", Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer));
   });
-  schemeQuery.addEventListener("change", () => {
-    if (!BASEMAPS[savedBasemap()]) setBasemap(null);
-    render();
+  map.on("overlayadd overlayremove", (e) => {
+    if (e.layer === sstGroup) {
+      store.set("tc-sst", e.type === "overlayadd" ? "on" : "off");
+      renderSstLegend();
+    }
   });
+
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
+
+  const sstLegend = L.control({ position: "bottomleft" });
+  sstLegend.onAdd = () => {
+    const div = L.DomUtil.create("div", "sst-legend");
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+  };
+  sstLegend.addTo(map);
+
+  function updateSst(info) {
+    if (!info || info.status !== "ok" || !info.template || !info.date) {
+      sstInfo = null;
+      sstGroup.clearLayers();
+      sstTiles = null;
+      renderSstLegend();
+      return;
+    }
+    const url = info.template
+      .replace("{Time}", info.date)
+      .replace("{TileMatrixSet}", info.tile_matrix_set)
+      .replace("{TileMatrix}", "{z}")
+      .replace("{TileRow}", "{y}")
+      .replace("{TileCol}", "{x}");
+    if (!sstTiles) {
+      sstTiles = L.tileLayer(url, {
+        opacity: 0.7,
+        maxNativeZoom: info.max_zoom || 7,
+        bounds: [[-85, -180], [85, 180]],
+        attribution: '海溫：<a href="https://www.earthdata.nasa.gov/gibs">NASA GIBS</a> / JPL MUR',
+      });
+      sstGroup.addLayer(sstTiles);
+    } else if (sstTiles._url !== url) {
+      sstTiles.setUrl(url);
+    }
+    sstInfo = info;
+    renderSstLegend();
+  }
+
+  function renderSstLegend() {
+    const div = sstLegend.getContainer();
+    const on = map.hasLayer(sstGroup);
+    div.hidden = !on;
+    if (!on) return;
+    if (!sstInfo) {
+      div.innerHTML = `<b>${SST_NAME}</b><div class="muted">目前無法取得海溫資料</div>`;
+      return;
+    }
+    const [y, m, d] = sstInfo.date.split("-");
+    div.innerHTML = `<b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析</span>` +
+      (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C">` : "") +
+      `<div class="muted">海溫約 26.5 °C 以上有利颱風發展或維持強度</div>`;
+  }
 
   const layer = L.layerGroup().addTo(map);
 
@@ -373,6 +430,7 @@
     }
     state.data.storms = (state.data.storms || []).sort((a, b) => intensity(b) - intensity(a));
     const storms = state.data.storms;
+    updateSst(state.data.layers?.sst);
     let fit = false;
     if (!storms.some((s) => s.key === state.selected)) {
       state.selected = storms[0]?.key ?? null;

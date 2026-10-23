@@ -14,7 +14,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fetcher import __main__ as main_mod  # noqa: E402
-from fetcher import cwa, jma, jtwc  # noqa: E402
+from fetcher import cwa, gibs, jma, jtwc  # noqa: E402
 from fetcher.common import FetchError, normalize_name  # noqa: E402
 from fetcher.merge import group_storms  # noqa: E402
 
@@ -165,6 +165,35 @@ class TestMerge(unittest.TestCase):
             self.assertIsNone(normalize_name(n))
 
 
+class TestGibs(unittest.TestCase):
+    def test_capabilities(self):
+        sst = gibs.parse_capabilities((FX / "gibs_capabilities_min.xml").read_bytes())
+        self.assertEqual(sst["date"], "2026-10-21")
+        self.assertEqual(sst["tile_matrix_set"], "GoogleMapsCompatible_Level7")
+        self.assertEqual(sst["max_zoom"], 7)
+        self.assertIn("{Time}", sst["template"])
+        self.assertTrue(sst["legend"].endswith("_H.svg"))
+
+    def test_missing_layer(self):
+        with self.assertRaises(FetchError):
+            gibs.parse_capabilities((FX / "gibs_capabilities_min.xml").read_bytes(), "NO_SUCH_LAYER")
+        with self.assertRaises(FetchError):
+            gibs.parse_capabilities(b"<not xml")
+
+    def test_sst_cached_and_fallback(self):
+        now = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
+        old = {"status": "ok", "date": "2026-10-20", "checked_at": "2026-10-23T11:00:00Z"}
+        with mock.patch.object(gibs, "fetch", side_effect=AssertionError("不應重抓")):
+            self.assertEqual(main_mod.build_sst({"layers": {"sst": old}}, now)["date"], "2026-10-20")
+        stale = {**old, "checked_at": "2026-10-23T00:00:00Z"}
+        with mock.patch.object(gibs, "fetch", side_effect=FetchError("HTTP 503")):
+            out = main_mod.build_sst({"layers": {"sst": stale}}, now)
+        self.assertEqual((out["status"], out["date"]), ("ok", "2026-10-20"))
+        with mock.patch.object(gibs, "fetch", side_effect=FetchError("HTTP 503")):
+            self.assertEqual(main_mod.build_sst({}, now)["status"], "error")
+
+
+@mock.patch.object(gibs, "fetch", lambda: {"layer": "x", "date": "2026-10-21"})
 class TestBuild(unittest.TestCase):
     def test_failed_source_reuses_previous(self):
         now = datetime(2026, 10, 17, 16, 0, tzinfo=timezone.utc)

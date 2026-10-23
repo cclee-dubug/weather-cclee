@@ -10,11 +10,13 @@
 | 交通部中央氣象署（CWA） | [氣象資料開放平臺 W-C0034-005](https://opendata.cwa.gov.tw/dataset/warning/W-C0034-005) | 10 分鐘平均 |
 | 美軍聯合颱風警報中心（JTWC） | [JTWC 警報](https://www.metoc.navy.mil/jtwc/jtwc.html) | 1 分鐘平均 |
 
+背景地圖使用 Esri 海洋與衛星圖磚；海表面溫度為 [NASA GIBS](https://www.earthdata.nasa.gov/gibs) 提供的 GHRSST MUR 每日分析（通常比今天晚 1 到 2 天）。
+
 各機構風速定義不同，同一個颱風 JTWC 的數值通常較高，不宜直接比較大小。本站資料僅供參考，防災決策請以中央氣象署發布的資訊為準。
 
 ## 運作方式
 
-- `fetcher/`：Python 程式（只用標準函式庫），抓取三個來源並合併成 `data/latest.json`。
+- `fetcher/`：Python 程式（只用標準函式庫），抓取三個來源並合併成 `data/latest.json`，並記錄 NASA GIBS 海表面溫度圖層的最新日期。
 - `.github/workflows/fetch-data.yml`：每 30 分鐘執行一次，資料有變化時自動提交。
 - 某個來源暫時抓不到時，沿用 24 小時內上一次的資料並標示狀態，不會讓網頁整個消失。
 

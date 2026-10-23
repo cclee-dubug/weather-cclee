@@ -159,3 +159,14 @@ td.na { color: var(--muted); }
 .leaflet-control-layers-expanded::before { content: "背景地圖"; display: block; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
 .leaflet-control-layers label { margin: 2px 0; cursor: pointer; }
 .leaflet-control-layers-selector { accent-color: var(--accent); }
+
+/* 海溫色標 */
+.sst-legend {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 6px 10px; font-size: 12px; line-height: 1.5; max-width: 300px;
+}
+.sst-legend[hidden] { display: none; }
+.sst-legend .muted { color: var(--muted); }
+/* GIBS 色標圖的文字是深色，墊白底才看得清楚 */
+.sst-legend img { display: block; width: 100%; height: auto; margin: 4px 0; background: #fff; border-radius: 4px; }

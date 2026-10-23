@@ -1,4 +1,4 @@
-"""抓取 JMA、CWA、JTWC 的颱風預報，寫入 data/latest.json。
+"""抓取 JMA、CWA、JTWC 的颱風預報與海溫圖層資訊，寫入 data/latest.json。
 
 用法：python -m fetcher [輸出路徑]
 
@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import cwa, jma, jtwc
+from . import cwa, gibs, jma, jtwc
 from .common import FetchError, iso_utc, parse_iso
 from .merge import group_storms
 
@@ -26,6 +26,8 @@ STALE_LIMIT = timedelta(hours=24)
 # 內容沒變時，至少每隔這麼久重寫一次檔案，讓「最後檢查時間」不會太舊，
 # 也讓 repo 持續有提交，避免 GitHub 停用排程
 HEARTBEAT = timedelta(hours=6)
+# 海溫每天只更新一次，capabilities 又有數 MB，不必每 30 分鐘重抓
+SST_REFRESH = timedelta(hours=3)
 
 
 def _previous_agency_storms(prev: dict, agency: str, now: datetime) -> list:
@@ -36,6 +38,22 @@ def _previous_agency_storms(prev: dict, agency: str, now: datetime) -> list:
         if a and issued and now - issued <= STALE_LIMIT:
             out.append({**a, "agency": agency, "stale": True})
     return out
+
+
+def build_sst(prev: dict, now: datetime) -> dict:
+    old = (prev.get("layers") or {}).get("sst") or {}
+    checked = parse_iso(old.get("checked_at"))
+    if old.get("status") == "ok" and checked and now - checked < SST_REFRESH:
+        return old
+    try:
+        sst = {"status": "ok", **gibs.fetch()}
+    except Exception as e:  # 海溫只是背景圖層，失敗不影響颱風資料
+        if old.get("status") == "ok":
+            return {**old, "message": f"更新失敗，沿用上次：{e}"}
+        return {"status": "error", "message": str(e)}
+    sst["checked_at"] = iso_utc(now)
+    print(f"[sst] {sst['date']}")
+    return sst
 
 
 def build(prev: dict, now: datetime) -> dict:
@@ -60,11 +78,14 @@ def build(prev: dict, now: datetime) -> dict:
         "checked_at": iso_utc(now),
         "sources": sources,
         "storms": group_storms(collected),
+        "layers": {"sst": build_sst(prev, now)},
     }
 
 
 def _content(d: dict) -> str:
-    return json.dumps({"sources": d.get("sources"), "storms": d.get("storms")}, sort_keys=True, ensure_ascii=False)
+    sst = {k: v for k, v in ((d.get("layers") or {}).get("sst") or {}).items() if k != "checked_at"}
+    return json.dumps({"sources": d.get("sources"), "storms": d.get("storms"), "sst": sst},
+                      sort_keys=True, ensure_ascii=False)
 
 
 def main(argv: list[str]) -> int:
