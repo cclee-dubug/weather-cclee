@@ -25,8 +25,8 @@ jobs:
               return rows or [(n, "", "") for n in names]
           D = dt.datetime.utcnow().strftime("%Y%m%d")
           B = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/"
-          for r in ls(B)[-12:]: print("  ", r)
-          for model in ("gfs", "gefs"):
+          for r in ls(B): print("  ", r)
+          for model in ("gfs",):
               base = f"{B}{model}.{D}/"
               for r in ls(base): print("  ", r)
               for hh in ("00", "06"):
@@ -34,4 +34,11 @@ jobs:
                   for r in rows[:40]: print("  ", r)
                   for sub in [r[0] for r in rows if r[0].endswith("/")][:4]:
                       for r in ls(f"{base}{hh}/{sub}")[:40]: print("    ", r)
+          for f in ("gfs.20261023/00/tctrack/avn.t00z.cyclone.trackatcfunix", "gfs.20261023/00/tctrack/gfso.t00z.cyclone.trackatcfunix"):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(B + f, headers=UA), timeout=60) as r:
+                      t = r.read().decode()
+                  print("==", f, len(t)); print("\n".join([l for l in t.splitlines() if l.startswith("WP")][:5]))
+              except Exception as e:
+                  print("==", f, "ERR", e)
           PY2
