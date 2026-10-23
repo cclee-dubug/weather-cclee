@@ -15,6 +15,17 @@
   const AGENCY_ORDER = ["cwa", "jma", "jtwc"];
   const STATUS_TEXT = { ok: "正常", no_storm: "無颱風", error: "連線失敗" };
 
+  // 模式路徑另存在 model-data 分支（每小時更新、不保留歷史），從 GitHub 原始檔網址讀取
+  const MODELS_URL = "https://raw.githubusercontent.com/cclee-dubug/weather-cclee/model-data/models.json";
+  // 同一家的決定性與系集用同一個顏色，以線型與地圖上的文字標籤區分
+  const MODELS = {
+    gfs: { name: "NCEP GFS", short: "GFS", family: "ncep", kind: "deterministic" },
+    ifs: { name: "ECMWF IFS", short: "IFS", family: "ecmwf", kind: "deterministic" },
+    gefs: { name: "NCEP GEFS", short: "GEFS", family: "ncep", kind: "ensemble" },
+    eps: { name: "ECMWF EPS", short: "EPS", family: "ecmwf", kind: "ensemble" },
+  };
+  const MODEL_GROUPS = [["決定性模式", ["gfs", "ifs"]], ["系集模式", ["gefs", "eps"]]];
+
   const state = {
     data: null,
     selected: null,
@@ -22,6 +33,9 @@
     enabled: new Set(AGENCY_ORDER),
     showPast: true,
     showCone: false,
+    models: null,
+    modelsFailed: false,
+    modelOn: new Set(["gfs", "ifs"]),
   };
 
   const $ = (id) => document.getElementById(id);
@@ -349,6 +363,99 @@
     }
     return bounds;
   }
+  /* ---------- 模式路徑 ---------- */
+
+  const modelColor = (code) => css(`--model-${MODELS[code].family}`);
+  const DEG = Math.PI / 180;
+  function distKm(lat1, lon1, lat2, lon2) {
+    const a = Math.sin((lat2 - lat1) * DEG / 2) ** 2 +
+      Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin((lon2 - lon1) * DEG / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(a));
+  }
+  // 官方資料中，時間最接近 t 的颱風位置（預報點與中央氣象署的過去路徑都有時間）
+  function stormPosAt(storm, t) {
+    let best = null;
+    for (const k of AGENCY_ORDER) {
+      const a = storm.agencies[k];
+      if (!a) continue;
+      for (const p of [...(a.past || []), ...(a.points || [])]) {
+        if (!p.time) continue;
+        const dt = Math.abs(Date.parse(p.time) - t);
+        if (!best || dt < best.dt) best = { dt, lat: p.lat, lon: p.lon };
+      }
+    }
+    return best;
+  }
+  const modelRef = (ms) => ms.track?.[0] || ms.mean?.[0] || ms.members?.find((m) => m.length)?.[0];
+  // 模式裡的系統與網頁上的颱風對應：英文名相同，或起報時的位置夠近（颱風移動約每小時 20 公里）
+  function matchModelStorm(code, storm) {
+    const m = state.models?.models?.[code];
+    if (!m?.storms?.length || !m.init) return null;
+    const init = Date.parse(m.init);
+    const name = (storm.name_en || "").toUpperCase();
+    let best = null;
+    for (const ms of m.storms) {
+      if (name && ms.name && ms.name.toUpperCase() === name) return ms;
+      const ref = modelRef(ms);
+      if (!ref) continue;
+      const pos = stormPosAt(storm, init + ref[0] * 3600e3);
+      if (!pos) continue;
+      const d = distKm(pos.lat, pos.lon, ref[1], ref[2]);
+      const limit = Math.min(800, 300 + 20 * pos.dt / 3600e3);
+      if (d <= limit && (!best || d < best.d)) best = { d, ms };
+    }
+    return best?.ms ?? null;
+  }
+
+  function modelTip(code, init, p, label) {
+    const w = wind(p[3], null);
+    return [
+      `<b>${esc(label)}</b> +${p[0]} 小時`,
+      `${fmt(new Date(Date.parse(init) + p[0] * 3600e3).toISOString())}　${p[1].toFixed(1)}°N ${p[2].toFixed(1)}°E`,
+      p[4] != null ? `中心氣壓 ${p[4]} hPa` : "",
+      w != null ? `近中心最大風速 ${w} ${unitText()} <span class="muted">（模式輸出）</span>` : "",
+      `<span class="muted">${fmt(init)} 起報</span>`,
+    ].filter(Boolean).join("<br>");
+  }
+
+  function drawModelLine(code, init, pts, label, dashed) {
+    if (pts.length < 2) return;
+    const c = modelColor(code);
+    const ll = pts.map((p) => [p[1], p[2]]);
+    // 底下墊一條背景色的寬線，疊在衛星雲圖或海溫上也看得清楚
+    L.polyline(ll, { color: css("--surface"), weight: 5.5, opacity: 0.75, interactive: false }).addTo(layer);
+    L.polyline(ll, { color: c, weight: 3, opacity: 0.95, interactive: false, lineCap: "round", ...(dashed ? { dashArray: "1 7" } : {}) }).addTo(layer);
+    for (const p of pts) {
+      if (p[0] === 0 || p[0] % 24) continue;
+      L.circleMarker([p[1], p[2]], { radius: 3.5, color: css("--surface"), weight: 1.5, fillColor: c, fillOpacity: 1 })
+        .bindTooltip(modelTip(code, init, p, label), { className: "tc-tip", direction: "top", offset: [0, -4] })
+        .addTo(layer);
+    }
+    const last = pts[pts.length - 1];
+    L.tooltip({ permanent: true, direction: "right", offset: [6, 0], className: "model-label" })
+      .setLatLng([last[1], last[2]]).setContent(`<span style="color:${c}">${esc(label)}</span>`).addTo(layer);
+  }
+
+  function drawModels(storm) {
+    for (const code of ["gefs", "eps", "gfs", "ifs"]) {  // 系集先畫，決定性模式疊在上面
+      if (!state.modelOn.has(code)) continue;
+      const ms = matchModelStorm(code, storm);
+      if (!ms) continue;
+      const init = state.models.models[code].init;
+      const meta = MODELS[code];
+      if (meta.kind === "deterministic") {
+        drawModelLine(code, init, ms.track || [], meta.short, false);
+        continue;
+      }
+      const c = modelColor(code);
+      for (const m of ms.members || []) {
+        if (m.length < 2) continue;
+        L.polyline(m.map((p) => [p[1], p[2]]), { color: c, weight: 1, opacity: 0.4, interactive: false }).addTo(layer);
+      }
+      if (ms.mean?.length) drawModelLine(code, init, ms.mean, `${meta.short} 平均`, true);
+    }
+  }
+
   // 列表排序用：目前強度，10 分鐘平均的機構優先，沒有才用 JTWC
   function intensity(storm) {
     for (const k of ["cwa", "jma", "jtwc"]) {
@@ -407,6 +514,34 @@
     box.querySelectorAll(".agency-chip").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.agency;
       state.enabled.has(k) ? state.enabled.delete(k) : state.enabled.add(k);
+      render();
+    }));
+  }
+
+  function renderModelToggles(storm) {
+    const box = $("model-toggles");
+    if (!state.models) {
+      box.innerHTML = `<p class="note">${state.modelsFailed ? "模式資料載入失敗，稍後自動重試" : "模式資料載入中…"}</p>`;
+      return;
+    }
+    box.innerHTML = MODEL_GROUPS.map(([title, codes]) => `<div class="model-group"><span class="group-label">${title}</span>` +
+      codes.map((code) => {
+        const m = state.models.models?.[code];
+        const meta = MODELS[code];
+        const has = m && matchModelStorm(code, storm);
+        let sub;
+        if (!m || !m.init) sub = "無資料";
+        else if (!has) sub = "沒有這個颱風";
+        else sub = `${fmt(m.init)} 起報`;
+        const warn = m?.status === "error" ? `<span class="stale" title="${esc(m.message || "")}">更新失敗</span>` : "";
+        const swatch = `<svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${modelColor(code)}" stroke-width="3" stroke-linecap="round"${meta.kind === "ensemble" ? ' stroke-dasharray="1 5"' : ""}/></svg>`;
+        return `<button type="button" class="agency-chip model-chip" data-model="${code}" aria-pressed="${state.modelOn.has(code)}"${has ? "" : " data-empty"}>
+          ${swatch}<span>${meta.short}</span><span class="sub">${sub}</span>${warn}</button>`;
+      }).join("") + `</div>`).join("");
+    box.querySelectorAll(".model-chip").forEach((b) => b.addEventListener("click", () => {
+      const k = b.dataset.model;
+      state.modelOn.has(k) ? state.modelOn.delete(k) : state.modelOn.add(k);
+      store.set("tc-models", [...state.modelOn].join(",") || "none");
       render();
     }));
   }
@@ -493,19 +628,36 @@
       if (s.key !== state.selected) drawStorm(s, false);
     }
     const sel = storms.find((s) => s.key === state.selected);
-    if (sel) selBounds = drawStorm(sel, true);
+    if (sel) {
+      drawModels(sel);  // 先畫模式，官方路徑疊在上面
+      selBounds = drawStorm(sel, true);
+    }
 
     $("detail").hidden = !sel;
     if (sel) {
       $("detail-title").textContent = stormTitle(sel);
       renderToggles(sel);
+      renderModelToggles(sel);
       renderChart(sel);
       renderTable(sel);
       if (fit && selBounds.length) map.fitBounds(selBounds, { padding: [40, 40], maxZoom: 6 });
     }
   }
 
+  async function loadModels() {
+    try {
+      const res = await fetch(MODELS_URL, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      state.models = await res.json();
+      state.modelsFailed = false;
+    } catch (e) {
+      console.warn("讀取模式資料失敗", e);
+      state.modelsFailed = !state.models;
+    }
+  }
+
   async function load(first = false) {
+    const models = loadModels();
     try {
       const res = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -518,6 +670,7 @@
     const storms = state.data.storms;
     updateSst(state.data.layers?.sst);
     refreshClouds();
+    await models;
     let fit = false;
     if (!storms.some((s) => s.key === state.selected)) {
       state.selected = storms[0]?.key ?? null;
@@ -534,6 +687,9 @@
   }));
   $("show-past").addEventListener("change", (e) => { state.showPast = e.target.checked; render(); });
   $("show-cone").addEventListener("change", (e) => { state.showCone = e.target.checked; render(); });
+
+  const savedModels = store.get("tc-models");
+  if (savedModels) state.modelOn = new Set(savedModels.split(",").filter((k) => MODELS[k]));
 
   try {
     const u = localStorage.getItem("tc-unit");
