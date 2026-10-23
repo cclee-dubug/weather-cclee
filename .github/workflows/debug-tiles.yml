@@ -1,0 +1,30 @@
+name: 診斷圖磚樣本（暫時）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 下載圖磚並推到 debug-tiles 分支
+        run: |
+          set +e
+          mkdir t && cd t
+          T=$(curl -s https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | python3 -c "import json,sys; print(json.load(sys.stdin)[-1]['basetime'])")
+          echo "himawari $T"
+          echo "== CORS"; curl -sI -H "Origin: https://cclee-dubug.github.io" https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | grep -i -E "^(access-control|content-type|HTTP)"
+          for z in 4; do for x in 12 13 14; do for y in 6 7; do
+            curl -s -o jma_${z}_${x}_${y}.jpg "https://www.jma.go.jp/bosai/himawari/data/satimg/$T/fd/$T/B13/TBB/$z/$x/$y.jpg"
+            curl -s -o ocean_${z}_${x}_${y}.jpg "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/$z/$y/$x"
+            curl -s -o img_${z}_${x}_${y}.jpg "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$z/$y/$x"
+            curl -s -o sst_${z}_${x}_${y}.png "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/2026-10-21/GoogleMapsCompatible_Level7/$z/$y/$x.png"
+          done; done; done
+          echo $T > himawari_time.txt
+          ls -la
+          git init -q -b debug-tiles && git add . && git -c user.name=probe -c user.email=probe@example.com commit -q -m tiles
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" debug-tiles
