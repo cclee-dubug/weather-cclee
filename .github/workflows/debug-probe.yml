@@ -6,25 +6,52 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: 探測
         run: |
           set +e
           D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
-          UA="typhoon-tracker/1.0"
-          code_of() { echo "$(curl -s -o /dev/null -m 30 -A $UA -w '%{http_code} %{content_type} %{size_download}' "$1") $1"; }
-          raw() { echo "== $1"; curl -s -m 30 -A $UA -w '\n[HTTP %{http_code}]\n' "$1" | head -c ${2:-1500}; echo; }
-          s3() { echo "== s3 $1 $2"; curl -s -m 30 "https://$1/?list-type=2&delimiter=/&prefix=$2" | grep -o -E '<(Key|Prefix)>[^<]*' | sed 's/<Key>//;s/<Prefix>//' | grep -i -E "${3:-.}" | head -${4:-30}; }
-          T=$(curl -s -A $UA https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | python3 -c "import json,sys;print(json.load(sys.stdin)[-1]['basetime'])")
-          for z in "3/6/3" "5/26/13" "5/27/14"; do code_of "https://www.jma.go.jp/bosai/himawari/data/satimg/$T/fd/$T/B13/TBB/$z.jpg"; done
-          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 1500
-          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/ 600
-          raw "https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/" 1500
-          s3 ecmwf-forecasts.s3.eu-central-1.amazonaws.com "$D/" "" 20
-          s3 ecmwf-forecasts.s3.eu-central-1.amazonaws.com "$D/00z/ifs/0p25/oper/" "tf" 20
-          s3 ecmwf-forecasts.s3.eu-central-1.amazonaws.com "$D/00z/ifs/0p25/enfo/" "tf" 20
-          s3 ecmwf-forecasts.s3.eu-central-1.amazonaws.com "$Y/12z/ifs/0p25/enfo/" "tf" 20
-          s3 noaa-gfs-bdp-pds.s3.amazonaws.com "gfs.$D/00/atmos/" "track|atcf|tcvit|cyclone|storm" 20
-          s3 noaa-gefs-pds.s3.amazonaws.com "gefs.$D/00/" "" 30
-          s3 noaa-gefs-pds.s3.amazonaws.com "gefs.$D/00/atmos/" "" 30
+          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          raw() { echo "== $1"; curl -s -m 30 -A "$BUA" -w '\n[HTTP %{http_code}]\n' "$1" | sed -e 's/<[^>]*>/ /g' | tr -s ' \t' | grep -v '^\s*$' | head -${2:-30}; }
+          s3() { echo "== s3 $1 $2"; curl -s -m 30 "https://$1/?list-type=2&delimiter=/&prefix=$2" | grep -o -E '<(Key|Prefix)>[^<]*' | sed 's/<Key>//;s/<Prefix>//' | head -${3:-30}; }
+          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 30
+          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/ 30
+          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/pgrb2ap5/ 60
+          for p in avno gfs.t00z.cyc gfs.t00z.syn gfs.t00z.storm gfs.t00z.track; do s3 noaa-gfs-bdp-pds.s3.amazonaws.com "gfs.$D/00/atmos/$p" 10; done
+          raw https://hurricanes.ral.ucar.edu/repository/data/adecks_open/ 40
+          raw https://hurricanes.ral.ucar.edu/repository/data/adecks_open/2026/ 400 | grep -i "awp" | head -20
+      - name: 測試 ECMWF BUFR 解碼
+        run: |
+          D=$(date -u +%Y%m%d)
+          curl -s -o oper.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/oper/${D}000000-360h-oper-tf.bufr"
+          curl -s -o enfo.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/enfo/${D}000000-360h-enfo-tf.bufr"
+          ls -la *.bufr
+          time pip install -q eccodes 2>&1 | tail -2
+          python3 - <<'PY'
+          import eccodes
+          for fn in ("oper.bufr", "enfo.bufr"):
+              n = 0
+              with open(fn, "rb") as f:
+                  while True:
+                      h = eccodes.codes_bufr_new_from_file(f)
+                      if h is None:
+                          break
+                      n += 1
+                      if n == 1:
+                          eccodes.codes_set(h, "unpack", 1)
+                          keys = []
+                          it = eccodes.codes_bufr_keys_iterator_new(h)
+                          while eccodes.codes_bufr_keys_iterator_next(it):
+                              keys.append(eccodes.codes_bufr_keys_iterator_get_name(it))
+                          eccodes.codes_bufr_keys_iterator_delete(it)
+                          print(fn, "first msg keys:", len(keys))
+                          print(sorted(set(k.split("#")[-1] for k in keys))[:200])
+                          for k in ("stormIdentifier", "longStormName", "numberOfSubsets", "ensembleMemberNumber", "year", "month", "day", "hour"):
+                              try:
+                                  print(" ", k, eccodes.codes_get_array(h, k)[:5] if k != "longStormName" else eccodes.codes_get(h, k))
+                              except Exception as e:
+                                  print(" ", k, "ERR", e)
+                      eccodes.codes_release(h)
+              print(fn, "messages:", n)
+          PY
