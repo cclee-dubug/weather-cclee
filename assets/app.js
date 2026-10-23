@@ -48,12 +48,14 @@
     if (s.name_zh && s.name_en) return `${s.name_zh} ${s.name_en}`;
     if (s.name_en) return s.name_en;
     const n = s.numbers || {};
-    return n.jtwc ? `熱帶性低氣壓 ${n.jtwc}` : "熱帶性低氣壓";
+    if (n.jtwc) return `熱帶性低氣壓 ${n.jtwc}`;
+    // JMA 對未命名的熱帶性低氣壓用英文字母編號（例如 b）
+    return n.jma ? `熱帶性低氣壓 ${n.jma}` : "熱帶性低氣壓";
   }
   function stormIds(s) {
     const n = s.numbers || {};
     const parts = [];
-    if (n.jma) parts.push(`JMA ${n.jma}`);
+    if (n.jma && /^\d{4}$/.test(n.jma)) parts.push(`JMA ${n.jma}`);
     if (n.jtwc) parts.push(`JTWC ${n.jtwc}`);
     return parts.join(" · ");
   }
@@ -109,6 +111,7 @@
       `<b>${esc(meta.name)}</b> ${p.tau === 0 ? "目前位置" : `+${p.tau} 小時`}`,
       `${fmt(p.time)}　${p.lat.toFixed(1)}°N ${p.lon.toFixed(1)}°E`,
       w != null ? `最大風速 <b>${w} ${unitText()}</b>${g != null ? `，陣風 ${g} ${unitText()}` : ""} <span class="muted">（${meta.avg}）</span>` : "",
+      p.category === "LOW" ? "預測減弱為低氣壓" : "",
       p.pres_hpa != null ? `中心氣壓 ${p.pres_hpa} hPa` : "",
       p.r70_km ? `70% 機率圈半徑 ${p.r70_km} km` : "",
       p.r_gale_km ? `七級風暴風半徑 ${p.r_gale_km} km` : "",
@@ -142,17 +145,20 @@
       }
       L.polyline(pts, { color: c, weight: 2.5, opacity: 0.9 * fade, dashArray: "6 5", interactive: false }).addTo(layer);
 
+      let lastDay = fmt(a.points[0].time).split(" ")[0];
       a.points.forEach((p, i) => {
         if (i === 0) return;
         const m = L.marker([p.lat, p.lon], { icon: shapeIcon(agency, selected ? 12 : 9), opacity: fade, keyboard: false })
           .bindTooltip(pointTip(agency, a, p), { className: "tc-tip", direction: "top", offset: [0, -6] })
           .addTo(layer);
         if (selected) m.on("click", () => m.openTooltip());
-        // 選取的颱風在每 24 小時標上日期，只標第一個顯示中的機構以免重疊
-        if (selected && p.tau % 24 === 0 && agency === firstEnabled(storm)) {
+        // 選取的颱風在每天第一個預報點標上日期，只標第一個顯示中的機構以免重疊
+        const day = fmt(p.time).split(" ")[0];
+        if (selected && day !== lastDay && agency === firstEnabled(storm)) {
           L.tooltip({ permanent: true, direction: "right", offset: [8, 0], className: "tau-label" })
-            .setLatLng([p.lat, p.lon]).setContent(fmt(p.time).split(" ")[0]).addTo(layer);
+            .setLatLng([p.lat, p.lon]).setContent(day).addTo(layer);
         }
+        lastDay = day;
       });
     }
     // 目前位置用主要機構（中央氣象署優先）
@@ -166,6 +172,14 @@
         .addTo(layer);
     }
     return bounds;
+  }
+  // 列表排序用：目前強度，10 分鐘平均的機構優先，沒有才用 JTWC
+  function intensity(storm) {
+    for (const k of ["cwa", "jma", "jtwc"]) {
+      const v = storm.agencies[k]?.points?.[0]?.vmax_kt;
+      if (v != null) return v;
+    }
+    return 0;
   }
   function firstEnabled(storm) {
     return AGENCY_ORDER.find((k) => state.enabled.has(k) && storm.agencies[k]?.points?.length);
@@ -324,7 +338,8 @@
       console.warn("讀取資料失敗", e);
       if (!state.data) { render(); return; }
     }
-    const storms = state.data.storms || [];
+    state.data.storms = (state.data.storms || []).sort((a, b) => intensity(b) - intensity(a));
+    const storms = state.data.storms;
     let fit = false;
     if (!storms.some((s) => s.key === state.selected)) {
       state.selected = storms[0]?.key ?? null;

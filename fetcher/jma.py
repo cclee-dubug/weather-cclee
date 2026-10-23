@@ -44,8 +44,9 @@ def parse_specifications(specs: list) -> dict:
         if not valid_position(lat, lon):
             continue
         wind = (p.get("maximumWind") or {})
-        vmax_kt = to_float((wind.get("sustained") or {}).get("kt"))
-        gust_kt = to_float((wind.get("gust") or {}).get("kt"))
+        # 轉為溫帶氣旋或低氣壓（category LOW）時 JMA 不預報風速，欄位填 0，視為沒有資料
+        vmax_kt = to_float((wind.get("sustained") or {}).get("kt")) or None
+        gust_kt = to_float((wind.get("gust") or {}).get("kt")) or None
         tau = int(p.get("advancedHours") or 0)
         points.append({
             "tau": tau,
@@ -53,7 +54,7 @@ def parse_specifications(specs: list) -> dict:
             "lat": lat,
             "lon": lon,
             "vmax_kt": vmax_kt,
-            "vmax_ms": to_float((wind.get("sustained") or {}).get("m/s")) or kt_to_ms(vmax_kt),
+            "vmax_ms": (to_float((wind.get("sustained") or {}).get("m/s")) or kt_to_ms(vmax_kt)) if vmax_kt else None,
             "gust_kt": gust_kt,
             "pres_hpa": to_float(p.get("pressure")),
             "category": (p.get("category") or {}).get("en"),

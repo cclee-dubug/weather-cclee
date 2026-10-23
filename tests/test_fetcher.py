@@ -58,6 +58,14 @@ class TestJma(unittest.TestCase):
         s = jma.parse_specifications(load("jma_specifications_asym.json"))
         self.assertIsNotNone(s["points"][0]["r_gale_km"])
 
+    def test_low_stage_has_no_wind(self):
+        specs = load("jma_specifications.json")
+        last = specs[-1]
+        last["category"] = {"jp": "低気圧", "en": "LOW"}
+        last["maximumWind"] = {"sustained": {"m/s": "0", "kt": "0"}, "gust": {"m/s": "0", "kt": "0"}}
+        p = jma.parse_specifications(specs)["points"][-1]
+        self.assertEqual((p["category"], p["vmax_kt"], p["vmax_ms"], p["gust_kt"]), ("LOW", None, None, None))
+
     def test_past_track(self):
         past = jma.parse_past_track(load("jma_forecast.json"))
         self.assertEqual(past[0], {"lat": 9.5, "lon": 160.0, "stage": "td"})
