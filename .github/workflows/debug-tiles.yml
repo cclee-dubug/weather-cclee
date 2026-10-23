@@ -7,24 +7,22 @@ permissions:
   contents: write
 
 jobs:
-  tiles:
+  fixtures:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: 下載圖磚並推到 debug-tiles 分支
+      - name: 下載模式路徑樣本並推到 debug-fixtures 分支
         run: |
           set +e
-          mkdir t && cd t
-          T=$(curl -s https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | python3 -c "import json,sys; print(json.load(sys.stdin)[-1]['basetime'])")
-          echo "himawari $T"
-          echo "== CORS"; curl -sI -H "Origin: https://cclee-dubug.github.io" https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json | grep -i -E "^(access-control|content-type|HTTP)"
-          for z in 4; do for x in 12 13 14; do for y in 6 7; do
-            curl -s -o jma_${z}_${x}_${y}.jpg "https://www.jma.go.jp/bosai/himawari/data/satimg/$T/fd/$T/B13/TBB/$z/$x/$y.jpg"
-            curl -s -o ocean_${z}_${x}_${y}.jpg "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/$z/$y/$x"
-            curl -s -o img_${z}_${x}_${y}.jpg "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$z/$y/$x"
-            curl -s -o sst_${z}_${x}_${y}.png "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/2026-10-21/GoogleMapsCompatible_Level7/$z/$y/$x.png"
-          done; done; done
-          echo $T > himawari_time.txt
+          mkdir f && cd f
+          D=$(date -u +%Y%m%d)
+          for s in oper enfo; do
+            curl -s -o ecmwf_${s}_${D}00.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/$s/${D}000000-360h-$s-tf.bufr"
+          done
+          B=https://hurricanes.ral.ucar.edu/repository/data/adecks_open
+          for f in awp292026.dat awp902026.dat awp912026.dat awp922026.dat awp932026.dat awp942026.dat awp952026.dat awp962026.dat awp972026.dat awp982026.dat awp992026.dat; do
+            code=$(curl -s -m 120 -o $f -w '%{http_code}' "$B/$f"); [ "$code" = 200 ] || rm -f $f
+          done
           ls -la
-          git init -q -b debug-tiles && git add . && git -c user.name=probe -c user.email=probe@example.com commit -q -m tiles
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" debug-tiles
+          git init -q -b debug-fixtures && git add . && git -c user.name=probe -c user.email=probe@example.com commit -q -m fixtures
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" debug-fixtures
