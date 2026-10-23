@@ -35,7 +35,7 @@
 
         <h3>模式預報</h3>
         <div class="model-toggles" id="model-toggles"></div>
-        <p class="note">模式路徑是電腦數值預報的原始結果，常與官方預報不同，僅供參考。系集模式的細線是各成員，點線是平均。</p>
+        <p class="note">模式路徑是電腦數值預報的原始結果，常與官方預報不同，僅供參考。系集模式的細線是各成員，點線是平均；路徑密度是各成員颱風中心通過該處附近的比例。</p>
 
         <h3>強度預報 <span class="unit-label"></span></h3>
         <div class="chart-wrap"><canvas id="intensity-chart" aria-label="各機構強度預報折線圖"></canvas></div>
@@ -56,6 +56,7 @@
     資料來源：<a href="https://www.jma.go.jp/bosai/map.html#contents=typhoon" target="_blank" rel="noopener">日本氣象廳</a>、
     <a href="https://opendata.cwa.gov.tw/" target="_blank" rel="noopener">交通部中央氣象署</a>、
     <a href="https://www.metoc.navy.mil/jtwc/jtwc.html" target="_blank" rel="noopener">美軍聯合颱風警報中心</a>；
+    衛星與海溫：<a href="https://www.earthdata.nasa.gov/gibs" target="_blank" rel="noopener">NASA GIBS</a>；
     模式：<a href="https://nomads.ncep.noaa.gov/" target="_blank" rel="noopener">NOAA NCEP</a>、
     <a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF 開放資料</a>（CC BY 4.0）。
     本站每 30 分鐘自動更新，資料僅供參考，防災決策請以中央氣象署發布為準。時間皆為台灣時間。
@@ -63,6 +64,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script src="assets/raster.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

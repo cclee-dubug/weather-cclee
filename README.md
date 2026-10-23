@@ -10,7 +10,14 @@
 | 交通部中央氣象署（CWA） | [氣象資料開放平臺 W-C0034-005](https://opendata.cwa.gov.tw/dataset/warning/W-C0034-005) | 10 分鐘平均 |
 | 美軍聯合颱風警報中心（JTWC） | [JTWC 警報](https://www.metoc.navy.mil/jtwc/jtwc.html) | 1 分鐘平均 |
 
-背景地圖使用 Esri 海洋與衛星圖磚；海表面溫度為 [NASA GIBS](https://www.earthdata.nasa.gov/gibs) 提供的 GHRSST MUR 每日分析（通常比今天晚 1 到 2 天）。衛星雲圖為[日本氣象廳](https://www.jma.go.jp/bosai/map.html#contents=himawari)向日葵衛星紅外線圖磚，網頁每 10 分鐘自動換成最新一張。
+背景地圖使用 Esri 海洋與衛星圖磚。地圖圖層：
+
+- **海表面溫度**：[NASA GIBS](https://www.earthdata.nasa.gov/gibs) 的 GHRSST MUR 每日分析（通常比今天晚 1 到 2 天），在網頁上重新上色，26 °C 以上由黃轉橘、紅、粉紅。
+- **衛星雲圖**：[日本氣象廳](https://www.jma.go.jp/bosai/map.html#contents=himawari)向日葵衛星紅外線圖磚，每 10 分鐘換成最新一張。
+- **BD 強化雲圖**：NASA GIBS 的向日葵 Band 13 紅外線（約晚 30 分鐘），還原成雲頂溫度後套用 Dvorak 分析用的 BD 色階。日本氣象廳的圖磚在 -70 °C 左右就全白，分不出 BD 色階最重要的 -70～-80 °C，所以這張改用 GIBS。
+- **系集路徑密度**：GEFS 或 EPS 各成員颱風中心通過某地 120 公里內的比例（與 ECMWF 侵襲機率的定義相同），在網頁上由成員路徑計算。
+
+GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormaps.json` 對照表還原數值後再上色。對照表由 `tools/gibs_colormap.py` 從 GIBS 色標檔產生，GIBS 改版色標時重跑即可。
 
 模式預報（側欄「模式預報」可個別開關）：
 

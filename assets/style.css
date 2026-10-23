@@ -83,12 +83,14 @@ h3 { font-size: 13px; margin: 16px 0 6px; color: var(--text-2); }
 .dot.no_storm { background: var(--muted); }
 .dot.error { background: var(--critical); }
 
-.unit-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.unit-switch button {
+.unit-switch, .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.unit-switch button, .segmented button {
   border: 0; background: transparent; color: var(--text-2);
   padding: 4px 10px; font: inherit; cursor: pointer;
 }
-.unit-switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.unit-switch button[aria-pressed="true"], .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.segmented button { font-size: 13px; }
+.segmented button:disabled { color: var(--muted); opacity: 0.6; cursor: default; }
 
 .layout { display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
 .sidebar {
@@ -188,5 +190,17 @@ td.na { color: var(--muted); }
 .layer-legend[hidden] { display: none; }
 .layer-legend .muted { color: var(--muted); }
 .layer-legend hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
-/* GIBS 色標圖的文字是深色，墊白底才看得清楚 */
-.layer-legend img { display: block; width: 100%; height: auto; margin: 4px 0; background: #fff; border-radius: 4px; }
+/* 色標：色條下方標數值，數值位置以百分比對齊色條 */
+.layer-legend .scale { margin: 4px 0 2px; width: 240px; }
+.layer-legend .scale .bar { display: block; width: 100%; height: 10px; border-radius: 2px; image-rendering: pixelated; }
+.layer-legend .scale .segs { display: flex; overflow: hidden; outline: 1px solid var(--border); }
+.layer-legend .scale .seg { flex: 1; min-width: 0; height: 10px; image-rendering: auto; }
+.layer-legend .scale .ticks { position: relative; height: 15px; font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.layer-legend .scale .ticks span { position: absolute; top: 1px; transform: translateX(-50%); }
+.layer-legend .scale .ticks span.start { transform: none; }
+.layer-legend .scale .ticks span.end { transform: translateX(-100%); }
+.layer-legend .density-scale { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 11px; color: var(--text-2); }
+.layer-legend .density-scale span { display: inline-flex; align-items: center; gap: 3px; }
+.layer-legend .density-scale i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
+/* BD 雲圖放大超過原生解析度時保持方塊狀，分段的邊界才不會被模糊掉 */
+.leaflet-bd-pane canvas { image-rendering: pixelated; }

@@ -25,6 +25,8 @@
     eps: { name: "ECMWF EPS", short: "EPS", family: "ecmwf", kind: "ensemble" },
   };
   const MODEL_GROUPS = [["決定性模式", ["gfs", "ifs"]], ["系集模式", ["gefs", "eps"]]];
+  // 系集成員數（GEFS：控制組＋30 個擾動成員；EPS：控制組＋50），沒追到這個颱風的成員也算在分母
+  const ENSEMBLE_SIZE = { gefs: 31, eps: 51 };
 
   const state = {
     data: null,
@@ -36,6 +38,7 @@
     models: null,
     modelsFailed: false,
     modelOn: new Set(["gfs", "ifs"]),
+    density: "off", // 系集路徑密度：off、gefs、eps
   };
 
   const $ = (id) => document.getElementById(id);
@@ -82,19 +85,15 @@
   const esri = (service, sources) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, {
     attribution: `Tiles &copy; <a href="https://www.esri.com/">Esri</a>${sources ? ` &mdash; ${sources}` : ""}`,
   });
-  // 圖層順序（由下到上）：背景圖磚 200 → 海溫 300 → 衛星雲圖 320 → 地名標註 450 → 路徑。
-  // 各自放在獨立的 pane，切換背景時新加入的圖磚才不會蓋住海溫與雲圖
-  map.createPane("sst");
-  map.getPane("sst").style.zIndex = 300;
-  map.getPane("sst").style.pointerEvents = "none";
-  map.createPane("clouds");
-  map.getPane("clouds").style.zIndex = 320;
-  map.getPane("clouds").style.pointerEvents = "none";
+  // 圖層順序（由下到上）：背景圖磚 200 → 海溫 300 → 衛星雲圖 320 → BD 強化雲圖 325 → 海岸線 330
+  // → 路徑密度 340 → 路徑 400 → 地名標註 450。各自放在獨立的 pane，切換背景時新加入的圖磚才不會蓋住其他圖層
+  for (const [name, z] of [["sst", 300], ["clouds", 320], ["bd", 325], ["coast", 330], ["density", 340], ["labels", 450]]) {
+    map.createPane(name);
+    map.getPane(name).style.zIndex = z;
+    map.getPane(name).style.pointerEvents = "none";
+  }
   // 紅外線雲圖是灰階（雲白、晴空暗），用「濾色」混合讓暗的晴空區變透明，只留下雲
   map.getPane("clouds").style.mixBlendMode = "screen";
-  map.createPane("labels");
-  map.getPane("labels").style.zIndex = 450;
-  map.getPane("labels").style.pointerEvents = "none";
   const esriLabels = (service) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, { pane: "labels" });
   const BASEMAPS = {
     ocean: ["海洋與地形", L.layerGroup([
@@ -113,7 +112,8 @@
   const savedBase = store.get("tc-basemap");
   (BASEMAPS[savedBase] || BASEMAPS.ocean)[1].addTo(map);
 
-  // 海表面溫度：NASA GIBS 的 GHRSST MUR 每日海溫圖磚，日期與網址樣板由 data/latest.json 提供
+  // 海表面溫度：NASA GIBS 的 GHRSST MUR 每日海溫圖磚，日期與網址樣板由 data/latest.json 提供；
+  // 在瀏覽器裡依 GIBS 色標還原溫度後改用自己的色階（26 °C 以上分得較細）
   const sstGroup = L.layerGroup();
   let sstInfo = null;
   let sstTiles = null;
@@ -127,12 +127,35 @@
   let cloudTime = null; // 最新一張的觀測時間（UTC，YYYYMMDDHHMMSS）
   let cloudStatus = "loading";
 
+  // BD 強化雲圖：NASA GIBS 的向日葵 Band 13 紅外線（每 10 分鐘，約晚 30 分鐘上線，原生最大縮放 6），
+  // 日本氣象廳的圖磚在 -70 °C 左右就全白，分不出 BD 色階最重要的 -70～-80 °C，所以改用 GIBS
+  const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
+  const BD_NAME = "BD 強化雲圖";
+  const bdGroup = L.layerGroup();
+  let bdTiles = null;
+  let bdTime = null; // ISO 時間
+  let bdStatus = "loading";
+  // 系集路徑密度（圖層在選取颱風後產生）
+  let densityLayer = null;
+  let densityKey = null;
+  let densityInfo = null; // { code, init, members }，給圖例用
+
+  // BD 雲圖是不透明的灰階，另外疊上海岸線
+  const coastTiles = L.tileLayer(`${GIBS}/Coastlines_15m/default/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png`, {
+    pane: "coast", bounds: [[-85, -180], [85, 180]],
+  });
+
   L.control.layers(
-    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup, [CLOUD_NAME]: cloudGroup },
+    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup, [CLOUD_NAME]: cloudGroup, [BD_NAME]: bdGroup },
     { position: "topright", collapsed: false },
   ).addTo(map);
   if (store.get("tc-sst") !== "off") sstGroup.addTo(map);
-  if (store.get("tc-cloud") !== "off") cloudGroup.addTo(map);
+  if (store.get("tc-bd") === "on") {
+    bdGroup.addTo(map);
+    coastTiles.addTo(map);
+  } else if (store.get("tc-cloud") !== "off") {
+    cloudGroup.addTo(map);
+  }
 
   map.on("baselayerchange", (e) => {
     store.set("tc-basemap", Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer));
@@ -140,9 +163,24 @@
   map.on("overlayadd overlayremove", (e) => {
     const on = e.type === "overlayadd" ? "on" : "off";
     if (e.layer === sstGroup) store.set("tc-sst", on);
+    // 兩種雲圖擇一顯示：BD 雲圖不透明，同時開會把另一張蓋住。
+    // 等圖層控制項處理完這次點擊再關另一張，否則控制項會依舊的勾選狀態把它加回來
     if (e.layer === cloudGroup) {
       store.set("tc-cloud", on);
-      if (on === "on") refreshClouds();
+      if (on === "on") {
+        setTimeout(() => map.removeLayer(bdGroup));
+        refreshClouds();
+      }
+    }
+    if (e.layer === bdGroup) {
+      store.set("tc-bd", on);
+      if (on === "on") {
+        setTimeout(() => map.removeLayer(cloudGroup));
+        coastTiles.addTo(map);
+        refreshBd();
+      } else {
+        map.removeLayer(coastTiles);
+      }
     }
     renderLegend();
   });
@@ -156,6 +194,16 @@
     return div;
   };
   layerLegend.addTo(map);
+
+  // 換成新的圖層：新圖層的圖磚載完後才移除舊的，避免畫面閃一下空白
+  function swapLayer(group, old, next) {
+    group.addLayer(next);
+    if (!old) return;
+    let removed = false;
+    const drop = () => { if (!removed) { removed = true; group.removeLayer(old); } };
+    next.once("load", drop);
+    setTimeout(drop, 15000);
+  }
 
   function updateSst(info) {
     if (!info || info.status !== "ok" || !info.template || !info.date) {
@@ -171,17 +219,16 @@
       .replace("{TileMatrix}", "{z}")
       .replace("{TileRow}", "{y}")
       .replace("{TileCol}", "{x}");
-    if (!sstTiles) {
-      sstTiles = L.tileLayer(url, {
+    if (sstTiles?.options.url !== url) {
+      const next = TcRaster.sstLayer(url, {
         pane: "sst",
         opacity: 0.7,
         maxNativeZoom: info.max_zoom || 7,
         bounds: [[-85, -180], [85, 180]],
         attribution: '海溫：<a href="https://www.earthdata.nasa.gov/gibs">NASA GIBS</a> / JPL MUR',
       });
-      sstGroup.addLayer(sstTiles);
-    } else if (sstTiles._url !== url) {
-      sstTiles.setUrl(url);
+      swapLayer(sstGroup, sstTiles, next);
+      sstTiles = next;
     }
     sstInfo = info;
     renderLegend();
@@ -242,23 +289,67 @@
     renderLegend();
   }
 
+  // GIBS 的最新觀測時間：請求時間填 default 會回最新一張，並在回應標頭寫出實際時間
+  const BD_LAYER = "Himawari_AHI_Band13_Clean_Infrared";
+  const bdUrl = (t) => `${GIBS}/${BD_LAYER}/default/${t}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`;
+  async function latestBdTime() {
+    try {
+      const res = await fetch(bdUrl("default").replace("{z}/{y}/{x}", "0/0/0"), { cache: "no-store" });
+      const t = res.ok && res.headers.get("layer-time-actual");
+      if (t && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(t)) return t;
+    } catch (_) { /* 網路錯誤時沿用上一張 */ }
+    return null;
+  }
+
+  let bdBusy = false;
+  async function refreshBd() {
+    if (!map.hasLayer(bdGroup) || bdBusy) return;
+    bdBusy = true;
+    const t = await latestBdTime();
+    bdBusy = false;
+    bdStatus = t || bdTime ? "ok" : "error";
+    if (t && t !== bdTime) {
+      bdTime = t;
+      const next = TcRaster.bdLayer(bdUrl(t), {
+        pane: "bd",
+        maxNativeZoom: 6,
+        bounds: [[-80, 60], [80, 222]],
+        attribution: '雲圖：<a href="https://www.earthdata.nasa.gov/gibs">NASA GIBS</a> / JMA Himawari',
+      });
+      swapLayer(bdGroup, bdTiles, next);
+      bdTiles = next;
+    }
+    renderLegend();
+  }
+
   function renderLegend() {
     const div = layerLegend.getContainer();
     const parts = [];
+    if (densityInfo) {
+      const meta = MODELS[densityInfo.code];
+      parts.push(`<div><b>路徑密度</b> <span class="muted">${meta.short}，${fmt(densityInfo.init)} 起報</span></div>` +
+        TcRaster.densityLegendHtml(meta.family) +
+        `<div class="muted">${densityInfo.members} 個成員中，颱風中心通過該處 ${TcRaster.DENSITY_RADIUS_KM} 公里內的比例（整個預報期間）</div>`);
+    }
     if (map.hasLayer(cloudGroup)) {
       const when = { loading: "載入中…", error: "目前無法取得雲圖" }[cloudStatus] ??
         `${fmt(stampToIso(cloudTime))} 觀測`;
       parts.push(`<div><b>${CLOUD_NAME}</b> <span class="muted">${when}</span></div>` +
         `<div class="muted">日本氣象廳向日葵衛星紅外線，越白代表雲頂越高越冷</div>`);
     }
+    if (map.hasLayer(bdGroup)) {
+      const when = { loading: "載入中…", error: "目前無法取得雲圖" }[bdStatus] ?? `${fmt(bdTime)} 觀測`;
+      parts.push(`<div><b>${BD_NAME}</b> <span class="muted">${when}</span></div>` + TcRaster.bdLegendHtml() +
+        `<div class="muted">向日葵衛星紅外線雲頂溫度（°C），以 Dvorak 分析用的 BD 色階分段，越冷代表對流越強</div>`);
+    }
     if (map.hasLayer(sstGroup)) {
       if (!sstInfo) {
         parts.push(`<div><b>${SST_NAME}</b> <span class="muted">目前無法取得海溫資料</span></div>`);
       } else {
         const [y, m, d] = sstInfo.date.split("-");
-        parts.push(`<div><b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析</span></div>` +
-          (sstInfo.legend ? `<img src="${esc(sstInfo.legend)}" alt="海溫色標，0 到 32 °C" onerror="this.remove()">` : "") +
-          `<div class="muted">海溫約 26.5 °C 以上有利颱風發展或維持強度</div>`);
+        parts.push(`<div><b>${SST_NAME}</b> <span class="muted">${Number(m)}/${Number(d)}（${y}）日分析，°C</span></div>` +
+          TcRaster.sstLegendHtml() +
+          `<div class="muted">黃色以上（26 °C 以上）有利颱風發展或維持強度</div>`);
       }
     }
     div.hidden = !parts.length;
@@ -456,6 +547,26 @@
     }
   }
 
+  // 路徑密度圖層只在颱風、模式或起報時間改變時重算
+  function drawDensity(storm) {
+    const code = state.density;
+    const ms = storm && MODELS[code] ? matchModelStorm(code, storm) : null;
+    const init = ms ? state.models.models[code].init : null;
+    const key = ms ? `${code}|${init}|${ms.id}` : null;
+    if (key !== densityKey) {
+      if (densityLayer) map.removeLayer(densityLayer);
+      densityLayer = null;
+      densityKey = key;
+      densityInfo = null;
+      const grid = ms && TcRaster.trackDensity(ms.members || [], ENSEMBLE_SIZE[code]);
+      if (grid) {
+        densityLayer = new TcRaster.DensityLayer({ pane: "density", grid, family: MODELS[code].family }).addTo(map);
+        densityInfo = { code, init, members: grid.members };
+      }
+    }
+    renderLegend();
+  }
+
   // 列表排序用：目前強度，10 分鐘平均的機構優先，沒有才用 JTWC
   function intensity(storm) {
     for (const k of ["cwa", "jma", "jtwc"]) {
@@ -537,11 +648,22 @@
         const swatch = `<svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${modelColor(code)}" stroke-width="3" stroke-linecap="round"${meta.kind === "ensemble" ? ' stroke-dasharray="1 5"' : ""}/></svg>`;
         return `<button type="button" class="agency-chip model-chip" data-model="${code}" aria-pressed="${state.modelOn.has(code)}"${has ? "" : " data-empty"}>
           ${swatch}<span>${meta.short}</span><span class="sub">${sub}</span>${warn}</button>`;
-      }).join("") + `</div>`).join("");
+      }).join("") + `</div>`).join("") +
+      `<div class="model-group"><span class="group-label">系集路徑密度</span>
+        <div class="segmented" role="group" aria-label="系集路徑密度">` +
+      [["off", "關閉"], ["gefs", "GEFS"], ["eps", "EPS"]].map(([k, label]) => {
+        const empty = k !== "off" && !matchModelStorm(k, storm);
+        return `<button type="button" data-density="${k}" aria-pressed="${state.density === k}"${empty ? ' disabled title="這個颱風沒有此模式的資料"' : ""}>${label}</button>`;
+      }).join("") + `</div></div>`;
     box.querySelectorAll(".model-chip").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.model;
       state.modelOn.has(k) ? state.modelOn.delete(k) : state.modelOn.add(k);
       store.set("tc-models", [...state.modelOn].join(",") || "none");
+      render();
+    }));
+    box.querySelectorAll("[data-density]").forEach((b) => b.addEventListener("click", () => {
+      state.density = b.dataset.density;
+      store.set("tc-density", state.density);
       render();
     }));
   }
@@ -632,6 +754,7 @@
       drawModels(sel);  // 先畫模式，官方路徑疊在上面
       selBounds = drawStorm(sel, true);
     }
+    drawDensity(state.models ? sel : null);
 
     $("detail").hidden = !sel;
     if (sel) {
@@ -670,6 +793,7 @@
     const storms = state.data.storms;
     updateSst(state.data.layers?.sst);
     refreshClouds();
+    refreshBd();
     await models;
     let fit = false;
     if (!storms.some((s) => s.key === state.selected)) {
@@ -690,6 +814,7 @@
 
   const savedModels = store.get("tc-models");
   if (savedModels) state.modelOn = new Set(savedModels.split(",").filter((k) => MODELS[k]));
+  if (ENSEMBLE_SIZE[store.get("tc-density")]) state.density = store.get("tc-density");
 
   try {
     const u = localStorage.getItem("tc-unit");
