@@ -17,12 +17,11 @@ jobs:
           mkdir f && cd f
           D=$(date -u +%Y%m%d)
           for s in oper enfo; do
-            curl -s -o ecmwf_${s}_${D}00.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/$s/${D}000000-360h-$s-tf.bufr"
+            curl -s --retry 6 --retry-delay 10 --retry-all-errors -f -o ecmwf_${s}_${D}00.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/$s/${D}000000-360h-$s-tf.bufr"
           done
-          B=https://hurricanes.ral.ucar.edu/repository/data/adecks_open
-          for f in awp292026.dat awp902026.dat awp912026.dat awp922026.dat awp932026.dat awp942026.dat awp952026.dat awp962026.dat awp972026.dat awp982026.dat awp992026.dat; do
-            code=$(curl -s -m 120 -o $f -w '%{http_code}' "$B/$f"); [ "$code" = 200 ] || rm -f $f
-          done
+          N=https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod
+          for f in aemn ac00 ap01 ap02; do curl -s --http1.1 -f -o gefs_${f}_${D}06.atcfunix "$N/gefs.$D/06/tctrack/$f.t06z.cyclone.trackatcfunix"; done
+          ls -la
           ls -la
           git init -q -b debug-fixtures && git add . && git -c user.name=probe -c user.email=probe@example.com commit -q -m fixtures
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" debug-fixtures
