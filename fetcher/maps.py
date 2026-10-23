@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from . import ecmwf, vortex
-from .common import FetchError, MS_PER_KT, USER_AGENT, TIMEOUT, get_text, http_get, iso_utc, parse_iso
+from .common import FetchError, MS_PER_KT, USER_AGENT, TIMEOUT, http_get, iso_utc, parse_iso
 
 TAUS = range(0, 121, 6)
 LEVELS = (200, 850)
@@ -57,13 +57,17 @@ COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 # ---------- 下載與解碼 ----------
 
-def _range(url: str, offset: int, length: int, tries: int = 5) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Range": f"bytes={offset}-{offset + length - 1}"})
+def _fetch(url: str, offset: int | None = None, length: int | None = None, tries: int = 4) -> bytes:
+    """下載整個檔案，或給 offset、length 時只下載那一段。"""
+    headers = {"User-Agent": USER_AGENT}
+    if offset is not None:
+        headers["Range"] = f"bytes={offset}-{offset + length - 1}"
+    req = urllib.request.Request(url, headers=headers)
     for i in range(tries):
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
                 data = resp.read()
-            if len(data) == length:
+            if length is None or len(data) == length:
                 return data
             raise FetchError(f"長度不符 {len(data)}/{length}")
         except Exception as e:  # noqa: BLE001 - S3 常回 503 Slow Down（2026-10-23 實測），稍等再試
@@ -94,19 +98,31 @@ def gfs_grib(init: datetime, tau: int, box) -> bytes:
     raise FetchError("unreachable")
 
 
+# ECMWF 開放資料的兩個來源，目錄結構相同。AWS S3 有時對同一個檔案持續回 503 Slow Down
+# （2026-10-23 實測），就改用 ECMWF 自己的伺服器
+IFS_MIRRORS = (ecmwf.BASE, "https://data.ecmwf.int/forecasts")
+
+
 def ifs_grib(init: datetime, tau: int, box=None) -> bytes:
     d, h = init.strftime("%Y%m%d"), init.strftime("%H")
-    base = f"{ecmwf.BASE}/{d}/{h}z/ifs/0p25/oper/{d}{h}0000-{tau}h-oper-fc"
-    rows = [json.loads(line) for line in get_text(base + ".index").splitlines() if line.startswith("{")]
-    want = [r for r in rows if r.get("levtype") == "pl" and r.get("param") in ("u", "v")
-            and r.get("levelist") in {str(p) for p in LEVELS}]
-    if len(want) != 2 * len(LEVELS):
-        raise FetchError(f"IFS +{tau}h 的索引裡找不到全部的 u、v")
-    parts = []
-    for r in want:
-        parts.append(_range(base + ".grib2", r["_offset"], r["_length"]))
-        time.sleep(0.3)  # 放慢一點，S3 比較不會限流
-    return b"".join(parts)
+    error = None
+    for mirror in IFS_MIRRORS:
+        base = f"{mirror}/{d}/{h}z/ifs/0p25/oper/{d}{h}0000-{tau}h-oper-fc"
+        try:
+            index = _fetch(base + ".index").decode("utf-8", errors="replace")
+            rows = [json.loads(line) for line in index.splitlines() if line.startswith("{")]
+            want = [r for r in rows if r.get("levtype") == "pl" and r.get("param") in ("u", "v")
+                    and r.get("levelist") in {str(p) for p in LEVELS}]
+            if len(want) != 2 * len(LEVELS):
+                raise FetchError(f"IFS +{tau}h 的索引裡找不到全部的 u、v")
+            parts = []
+            for r in want:
+                parts.append(_fetch(base + ".grib2", r["_offset"], r["_length"]))
+                time.sleep(0.3)  # 放慢一點，比較不會被限流
+            return b"".join(parts)
+        except FetchError as e:
+            error = e
+    raise error
 
 
 def decode(data: bytes) -> dict:

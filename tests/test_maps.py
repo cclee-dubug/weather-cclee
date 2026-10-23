@@ -66,6 +66,25 @@ class CropTest(unittest.TestCase):
         self.assertAlmostEqual(fr["mean_from"], 270, delta=3)
 
 
+class IfsDownloadTest(unittest.TestCase):
+    def test_falls_back_to_ecmwf_mirror(self):
+        index = "\n".join(
+            '{"levtype": "pl", "param": "%s", "levelist": "%s", "_offset": %d, "_length": 4}' % (p, lev, i * 4)
+            for i, (p, lev) in enumerate([("u", "200"), ("v", "200"), ("u", "850"), ("v", "850")]))
+        urls = []
+
+        def fake(url, offset=None, length=None):
+            urls.append(url)
+            if url.startswith(maps.IFS_MIRRORS[0]):
+                raise maps.FetchError("HTTPError: HTTP Error 503: Slow Down")
+            return index.encode() if offset is None else b"GRIB"
+
+        with mock.patch.object(maps, "_fetch", fake), mock.patch.object(maps.time, "sleep"):
+            data = maps.ifs_grib(datetime(2026, 10, 23, tzinfo=timezone.utc), 36)
+        self.assertEqual(data, b"GRIB" * 4)
+        self.assertTrue(urls[1].startswith("https://data.ecmwf.int/forecasts/20261023/00z/ifs/0p25/oper/20261023000000-36h-oper-fc"))
+
+
 class BuildTest(unittest.TestCase):
     def models(self, init):
         track = [[0, 20.0, 130.0, 80, 960], [6, 20.5, 129.5, 85, 955], [12, 21.0, 129.0, 85, 955]]
