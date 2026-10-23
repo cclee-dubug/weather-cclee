@@ -68,7 +68,11 @@
   const esri = (service, sources) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, {
     attribution: `Tiles &copy; <a href="https://www.esri.com/">Esri</a>${sources ? ` &mdash; ${sources}` : ""}`,
   });
-  // 地名標註放在最上層，才不會被海溫蓋住
+  // 圖層順序（由下到上）：背景圖磚 200 → 衛星雲圖、海溫 300 → 地名標註 450 → 路徑。
+  // 各自放在獨立的 pane，切換背景時新加入的圖磚才不會蓋住海溫
+  map.createPane("sst");
+  map.getPane("sst").style.zIndex = 300;
+  map.getPane("sst").style.pointerEvents = "none";
   map.createPane("labels");
   map.getPane("labels").style.zIndex = 450;
   map.getPane("labels").style.pointerEvents = "none";
@@ -137,6 +141,7 @@
       .replace("{TileCol}", "{x}");
     if (!sstTiles) {
       sstTiles = L.tileLayer(url, {
+        pane: "sst",
         opacity: 0.7,
         maxNativeZoom: info.max_zoom || 7,
         bounds: [[-85, -180], [85, 180]],
