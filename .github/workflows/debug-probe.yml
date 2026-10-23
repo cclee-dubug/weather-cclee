@@ -13,45 +13,52 @@ jobs:
           set +e
           D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
           BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
-          raw() { echo "== $1"; curl -s -m 30 -A "$BUA" -w '\n[HTTP %{http_code}]\n' "$1" | sed -e 's/<[^>]*>/ /g' | tr -s ' \t' | grep -v '^\s*$' | head -${2:-30}; }
-          s3() { echo "== s3 $1 $2"; curl -s -m 30 "https://$1/?list-type=2&delimiter=/&prefix=$2" | grep -o -E '<(Key|Prefix)>[^<]*' | sed 's/<Key>//;s/<Prefix>//' | head -${3:-30}; }
-          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 30
-          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/ 30
-          raw https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/gefs.$D/00/pgrb2ap5/ 60
-          for p in avno gfs.t00z.cyc gfs.t00z.syn gfs.t00z.storm gfs.t00z.track; do s3 noaa-gfs-bdp-pds.s3.amazonaws.com "gfs.$D/00/atmos/$p" 10; done
-          raw https://hurricanes.ral.ucar.edu/repository/data/adecks_open/ 40
-          raw https://hurricanes.ral.ucar.edu/repository/data/adecks_open/2026/ 400 | grep -i "awp" | head -20
-      - name: 測試 ECMWF BUFR 解碼
+          hrefs() { echo "== $1"; curl -s -m ${3:-60} -A "$BUA" -w '\n[HTTP %{http_code} %{size_download}B]\n' "$1" | grep -o -E 'href="[^"]*"|\[HTTP[^]]*\]' | sed 's/href=//' | grep -E "${2:-.}" | head -60; }
+          echo "== nomads verbose"; curl -sv -m 30 -A "$BUA" -o /dev/null https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/ 2>&1 | grep -E '^[<>] ' | head -30
+          hrefs https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
+          hrefs https://nomads.ncep.noaa.gov/pub/data/nccf/com/
+          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/ . 90
+          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/gfs.$D/00/ . 90
+          hrefs https://ftp.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/gefs.$D/00/ . 90
+          hrefs https://hurricanes.ral.ucar.edu/repository/data/adecks_open/ 'wp|sh|io|HTTP' 120
+          hrefs https://hurricanes.ral.ucar.edu/repository/data/ . 120
+      - name: 讀 ECMWF 路徑內容
         run: |
           D=$(date -u +%Y%m%d)
           curl -s -o oper.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/oper/${D}000000-360h-oper-tf.bufr"
           curl -s -o enfo.bufr "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/$D/00z/ifs/0p25/enfo/${D}000000-360h-enfo-tf.bufr"
-          ls -la *.bufr
-          time pip install -q eccodes 2>&1 | tail -2
-          python3 - <<'PY'
+          pip install -q eccodes 2>&1 | tail -2
+          python3 - <<'PY2'
           import eccodes
           for fn in ("oper.bufr", "enfo.bufr"):
-              n = 0
               with open(fn, "rb") as f:
                   while True:
                       h = eccodes.codes_bufr_new_from_file(f)
                       if h is None:
                           break
-                      n += 1
-                      if n == 1:
-                          eccodes.codes_set(h, "unpack", 1)
-                          keys = []
-                          it = eccodes.codes_bufr_keys_iterator_new(h)
-                          while eccodes.codes_bufr_keys_iterator_next(it):
-                              keys.append(eccodes.codes_bufr_keys_iterator_get_name(it))
-                          eccodes.codes_bufr_keys_iterator_delete(it)
-                          print(fn, "first msg keys:", len(keys))
-                          print(sorted(set(k.split("#")[-1] for k in keys))[:200])
-                          for k in ("stormIdentifier", "longStormName", "numberOfSubsets", "ensembleMemberNumber", "year", "month", "day", "hour"):
-                              try:
-                                  print(" ", k, eccodes.codes_get_array(h, k)[:5] if k != "longStormName" else eccodes.codes_get(h, k))
-                              except Exception as e:
-                                  print(" ", k, "ERR", e)
+                      eccodes.codes_set(h, "unpack", 1)
+                      sid = eccodes.codes_get(h, "stormIdentifier").strip()
+                      name = eccodes.codes_get(h, "longStormName").strip()
+                      ns = eccodes.codes_get(h, "numberOfSubsets")
+                      n = 0
+                      while True:
+                          try:
+                              eccodes.codes_get_array(h, "#%d#timePeriod" % (n + 1)); n += 1
+                          except Exception:
+                              break
+                      lat = eccodes.codes_get_array(h, "#2#latitude")
+                      print(fn, sid, name, "subsets", ns, "periods", n, "lat0", list(lat[:3]))
+                      if sid.endswith("W") or name.upper() in ("FENGSHEN", "KALMAEGI"):
+                          for i in range(1, min(n, 8) + 1):
+                              tp = eccodes.codes_get_array(h, "#%d#timePeriod" % i)
+                              la = eccodes.codes_get_array(h, "#%d#latitude" % (i * 2 + 2))
+                              lo = eccodes.codes_get_array(h, "#%d#longitude" % (i * 2 + 2))
+                              pr = eccodes.codes_get_array(h, "#%d#pressureReducedToMeanSeaLevel" % (i + 1))
+                              ws = eccodes.codes_get_array(h, "#%d#windSpeedAt10M" % (i + 1))
+                              print("   tp", list(tp[:2]), "lat", list(la[:3]), "lon", list(lo[:3]), "p", list(pr[:3]), "w", list(ws[:3]))
+                          if fn == "oper.bufr":
+                              with open("sample_oper.bufr", "ab") as out:
+                                  out.write(eccodes.codes_get_message(h))
                       eccodes.codes_release(h)
-              print(fn, "messages:", n)
-          PY
+          PY2
+          ls -la sample_oper.bufr && base64 -w0 sample_oper.bufr | head -c 60000; echo
