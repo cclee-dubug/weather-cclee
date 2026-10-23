@@ -8,20 +8,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: 探測 UCAR a-deck
+      - name: 探測 GFS 路徑檔
         run: |
           set +e
-          B=https://hurricanes.ral.ucar.edu/repository/data/adecks_open
-          time curl -s -m 120 "$B/" -o list.html
-          grep -o -E 'awp[0-9]{2}2026\.dat</a>[^<]*' list.html | sed 's/<\/a>//' | tail -15
-          for f in awp292026.dat awp902026.dat awp912026.dat awp922026.dat awp932026.dat awp942026.dat awp952026.dat awp962026.dat awp972026.dat awp982026.dat awp992026.dat; do
-            code=$(curl -s -m 120 -o $f -w '%{http_code}' "$B/$f"); echo "== $f $code $(wc -c < $f 2>/dev/null)"
-            [ "$code" = 200 ] || continue
-            echo "latest DTG: $(cut -d, -f3 $f | sort | tail -1)"
-            L=$(cut -d, -f3 $f | sort | tail -1)
-            echo "techs in latest DTG:"; grep ",$L," $f | cut -d, -f5 | tr -d ' ' | sort | uniq -c | tr '\n' ' '; echo
-            echo "latest DTG per key tech:"; for t in AVNO AVNI AEMN AEMI AC00 AP01 AP30 EMX ECMF EEMN EMXI JGSM JTWC CARQ; do echo -n "$t=$(grep -E "^[^,]*,[^,]*,[^,]*,[^,]*, *$t," $f | cut -d, -f3 | sort | tail -1 | tr -d ' ') "; done; echo
-            grep -E ", *AVNO," $f | tail -3
-            grep -E ", *AP01," $f | tail -2
+          D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
+          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          hrefs() { echo "== $*"; curl -s -m 60 "$@" -w '\n[HTTP %{http_code} %{size_download}B]\n' | grep -o -E 'href="[^"]*"|\[HTTP[^]]*\]' | sed 's/href=//' | head -40; }
+          hrefs --http1.1 -A "$BUA" https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
+          hrefs --http1.1 https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
+          hrefs --http1.1 -A "$BUA" https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.$D/00/atmos/
+          hrefs -A "$BUA" https://ftpprd.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/
+          echo "== S3 gfs atmos 非 grib 檔"
+          tok=""; for i in 1 2 3 4 5 6 7 8 9 10; do
+            url="https://noaa-gfs-bdp-pds.s3.amazonaws.com/?list-type=2&prefix=gfs.$D/00/atmos/"; [ -n "$tok" ] && url="$url&continuation-token=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$tok")"
+            curl -s -m 60 "$url" > l.xml
+            grep -o '<Key>[^<]*' l.xml | sed 's/<Key>//' | grep -v -E 'pgrb2|sfluxgrb|\.idx$|\.nc$|goesimp|wafs|master|grib2' 
+            tok=$(grep -o '<NextContinuationToken>[^<]*' l.xml | sed 's/<NextContinuationToken>//'); [ -z "$tok" ] && break
           done
-          ls -la
+          echo "== S3 gfs 日目錄"; curl -s "https://noaa-gfs-bdp-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gfs.$D/00/" | grep -o -E '<(Key|Prefix)>[^<]*' | head
+          echo "== S3 gefs 日目錄"; curl -s "https://noaa-gefs-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gefs.$D/00/" | grep -o -E '<(Key|Prefix)>[^<]*' | head -20
+          echo "== S3 gefs atmos"; curl -s "https://noaa-gefs-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gefs.$D/00/atmos/" | grep -o -E '<(Key|Prefix)>[^<]*' | head -20
