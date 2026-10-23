@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-23T10:11:18Z",
+ "checked_at": "2026-10-23T10:15:47Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -10,7 +10,7 @@
   "cwa": {
    "name": "中央氣象署",
    "status": "error",
-   "message": "尚未設定 CWA_API_KEY",
+   "message": "JSON 解析失敗：Expecting value: line 1 column 1 (char 0)",
    "count": 0
   },
   "jtwc": {
@@ -1016,5 +1016,5 @@
    }
   }
  ],
- "updated_at": "2026-10-23T10:11:18Z"
+ "updated_at": "2026-10-23T10:15:47Z"
 }
