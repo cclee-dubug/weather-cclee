@@ -8,6 +8,7 @@ jobs:
     steps:
       - name: data
         run: |
+          set +e
           mkdir out && cd out
           N="https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
           for f in 000 024; do
@@ -17,10 +18,11 @@ jobs:
           E=https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/20261023/00z/ifs/0p25/oper
           for s in 0 24; do
             curl -sS -m 60 -o ifs_${s}.index -w "ifs idx $s %{http_code}\n" "$E/20261023000000-${s}h-oper-fc.index" >> log.txt
+            head -c 400 ifs_${s}.index >> log.txt; echo >> log.txt
             python3 - "$s" <<'PY' >> log.txt
           import json, subprocess, sys
           s = sys.argv[1]
-          rows = [json.loads(l) for l in open(f"ifs_{s}.index")]
+          rows = [json.loads(l) for l in open(f"ifs_{s}.index") if l.startswith("{")]
           want = [r for r in rows if r.get("param") in ("u", "v") and r.get("levtype") == "pl" and r.get("levelist") in ("200", "850")]
           print("ifs", s, "fields", len(rows), "want", [(r["param"], r["levelist"], r["_length"]) for r in want])
           url = f"https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/20261023/00z/ifs/0p25/oper/20261023000000-{s}h-oper-fc.grib2"
@@ -32,7 +34,7 @@ jobs:
           print("levels sample", sorted({r.get("levelist") for r in rows if r.get("levtype") == "pl"}))
           PY
           done
-          curl -sS -m 60 -L -o coast.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson
+          curl -sS -m 60 -L -w "coast %{http_code} %{size_download}\n" -o coast.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson
           python3 - <<'PY' >> log.txt
           import json
           d = json.load(open("coast.geojson"))
