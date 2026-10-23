@@ -8,23 +8,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: 探測 GFS 路徑檔
+      - name: 探測 NOMADS ens_tracker（HTTP/1.1）
         run: |
-          set +e
-          D=$(date -u +%Y%m%d); Y=$(date -u -d yesterday +%Y%m%d)
-          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
-          hrefs() { echo "== $*"; curl -s -m 60 "$@" -w '\n[HTTP %{http_code} %{size_download}B]\n' | grep -o -E 'href="[^"]*"|\[HTTP[^]]*\]' | sed 's/href=//' | head -40; }
-          hrefs --http1.1 -A "$BUA" https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
-          hrefs --http1.1 https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/
-          hrefs --http1.1 -A "$BUA" https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.$D/00/atmos/
-          hrefs -A "$BUA" https://ftpprd.ncep.noaa.gov/data/nccf/com/ens_tracker/prod/
-          echo "== S3 gfs atmos 非 grib 檔"
-          tok=""; for i in 1 2 3 4 5 6 7 8 9 10; do
-            url="https://noaa-gfs-bdp-pds.s3.amazonaws.com/?list-type=2&prefix=gfs.$D/00/atmos/"; [ -n "$tok" ] && url="$url&continuation-token=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$tok")"
-            curl -s -m 60 "$url" > l.xml
-            grep -o '<Key>[^<]*' l.xml | sed 's/<Key>//' | grep -v -E 'pgrb2|sfluxgrb|\.idx$|\.nc$|goesimp|wafs|master|grib2' 
-            tok=$(grep -o '<NextContinuationToken>[^<]*' l.xml | sed 's/<NextContinuationToken>//'); [ -z "$tok" ] && break
-          done
-          echo "== S3 gfs 日目錄"; curl -s "https://noaa-gfs-bdp-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gfs.$D/00/" | grep -o -E '<(Key|Prefix)>[^<]*' | head
-          echo "== S3 gefs 日目錄"; curl -s "https://noaa-gefs-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gefs.$D/00/" | grep -o -E '<(Key|Prefix)>[^<]*' | head -20
-          echo "== S3 gefs atmos"; curl -s "https://noaa-gefs-pds.s3.amazonaws.com/?list-type=2&delimiter=/&prefix=gefs.$D/00/atmos/" | grep -o -E '<(Key|Prefix)>[^<]*' | head -20
+          python3 - <<'PY2'
+          import re, urllib.request, datetime as dt
+          UA = {"User-Agent": "typhoon-tracker/1.0"}
+          def ls(url):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
+                      html = r.read().decode("utf-8", "replace")
+              except Exception as e:
+                  print("==", url, "ERR", e); return []
+              names = [h for h in re.findall(r'href="([^"?/][^"]*)"', html)]
+              rows = re.findall(r'href="([^"?][^"]*)">[^<]*</a>\s*([0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]{5})\s+([0-9.KMG-]+)', html)
+              print("==", url, len(html), "bytes", len(names), "entries")
+              return rows or [(n, "", "") for n in names]
+          D = dt.datetime.utcnow().strftime("%Y%m%d")
+          B = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/"
+          for r in ls(B)[-12:]: print("  ", r)
+          for model in ("gfs", "gefs"):
+              base = f"{B}{model}.{D}/"
+              for r in ls(base): print("  ", r)
+              for hh in ("00", "06"):
+                  rows = ls(f"{base}{hh}/")
+                  for r in rows[:40]: print("  ", r)
+                  for sub in [r[0] for r in rows if r[0].endswith("/")][:4]:
+                      for r in ls(f"{base}{hh}/{sub}")[:40]: print("    ", r)
+          PY2
