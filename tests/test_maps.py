@@ -107,6 +107,31 @@ class BuildTest(unittest.TestCase):
             self.assertTrue((out / "gfs/2026102312/29W_000.png").exists())
             self.assertFalse((out / "gfs/2026102306").exists())
 
+    def test_retry_only_fetches_missing_times(self):
+        calls, broken = [], {6}
+
+        def flaky(init, tau, box):
+            calls.append(tau)
+            if tau in broken:
+                raise maps.FetchError("HTTP 503")
+            return b""
+
+        now = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
+        models = self.models("2026-10-23T06:00:00Z")
+        models["models"].pop("ifs")
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(maps, "decode", lambda data: grid()):
+            first = maps.build(models, {}, Path(d), now, {"gfs": flaky, "ifs": flaky})
+            self.assertFalse(first["models"]["gfs"]["complete"])
+            self.assertEqual([f["tau"] for f in first["models"]["gfs"]["storms"][0]["frames"]], [0, 12])
+            calls.clear()
+            broken.clear()
+            second = maps.build(models, first, Path(d), now, {"gfs": flaky, "ifs": flaky})
+            gfs = second["models"]["gfs"]
+            self.assertEqual(calls, [6])
+            self.assertTrue(gfs["complete"])
+            self.assertEqual(gfs["tries"], 2)
+            self.assertEqual([f["tau"] for f in gfs["storms"][0]["frames"]], [0, 6, 12])
+
     def test_failed_download_retried_then_given_up(self):
         def broken(init, tau, box):
             raise maps.FetchError("HTTP 503")

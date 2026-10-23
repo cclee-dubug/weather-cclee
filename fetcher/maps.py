@@ -57,7 +57,7 @@ COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 # ---------- 下載與解碼 ----------
 
-def _range(url: str, offset: int, length: int, tries: int = 3) -> bytes:
+def _range(url: str, offset: int, length: int, tries: int = 5) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Range": f"bytes={offset}-{offset + length - 1}"})
     for i in range(tries):
         try:
@@ -66,10 +66,10 @@ def _range(url: str, offset: int, length: int, tries: int = 3) -> bytes:
             if len(data) == length:
                 return data
             raise FetchError(f"長度不符 {len(data)}/{length}")
-        except Exception as e:  # noqa: BLE001 - S3 偶爾回 503，稍等再試
+        except Exception as e:  # noqa: BLE001 - S3 常回 503 Slow Down（2026-10-23 實測），稍等再試
             if i == tries - 1:
                 raise FetchError(f"{type(e).__name__}: {e}") from None
-            time.sleep(3 * 2 ** i)
+            time.sleep(5 * 2 ** i)
     raise FetchError("unreachable")
 
 
@@ -102,7 +102,11 @@ def ifs_grib(init: datetime, tau: int, box=None) -> bytes:
             and r.get("levelist") in {str(p) for p in LEVELS}]
     if len(want) != 2 * len(LEVELS):
         raise FetchError(f"IFS +{tau}h 的索引裡找不到全部的 u、v")
-    return b"".join(_range(base + ".grib2", r["_offset"], r["_length"]) for r in want)
+    parts = []
+    for r in want:
+        parts.append(_range(base + ".grib2", r["_offset"], r["_length"]))
+        time.sleep(0.3)  # 放慢一點，S3 比較不會限流
+    return b"".join(parts)
 
 
 def decode(data: bytes) -> dict:
@@ -250,9 +254,10 @@ def render(fr: dict, meta: dict) -> bytes:
                       extend="max", ticks=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60])
     cb.ax.tick_params(labelsize=9)
     d = fr["mean_from"]
-    fig.text(left, 0.035, f"0-500 km mean shear: {fr['mean_kt']:.0f} kt from {d:03.0f}° ({COMPASS[round(d / 45) % 8]})"
-             "   dashed circle: 500 km", fontsize=9.5)
-    fig.text(right, 0.035, meta["credit"], fontsize=8.5, ha="right", color="#555555")
+    fig.text(left, 0.035, f"0-500 km mean shear: {fr['mean_kt']:.0f} kt from {d:03.0f}° ({COMPASS[round(d / 45) % 8]})",
+             fontsize=9.5, fontweight="bold")
+    fig.text(left, 0.01, "Dashed circle: 500 km (vortex removal and averaging radius)", fontsize=8.5, color="#555555")
+    fig.text(right, 0.01, meta["credit"], fontsize=8.5, ha="right", color="#555555")
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
@@ -287,26 +292,34 @@ def _label(storm) -> str:
     return f"{name} ({sid})" if name and name != sid else sid or name
 
 
-def build_model(code: str, entry: dict, outdir: Path, grib=None) -> dict:
+def build_model(code: str, entry: dict, outdir: Path, grib=None, done: dict | None = None) -> dict:
+    """done 是同一次起報上一輪已經畫好的圖（重試時只補缺的時段）。"""
     grib = grib or GRIB[code]
     init = parse_iso(entry["init"])
     storms = [s for s in entry.get("storms") or [] if _frames(s.get("track"))][:MAX_STORMS]
     tracks = [_frames(s["track"]) for s in storms]
     out = [{"id": s["id"], "name": s.get("name"), "track": s["track"], "frames": []} for s in storms]
+    have = {(s["id"], f["tau"]): f for s in (done or {}).get("storms", []) for f in s["frames"]
+            if (outdir / f["img"]).exists()}
     errors = []
     taus = sorted({tau for t in tracks for tau in t})
     box = _box(tracks) if tracks else None
     for tau in taus:
+        need = [(s, t, o) for s, t, o in zip(storms, tracks, out) if tau in t]
+        for s, t, o in need:
+            if (s["id"], tau) in have:
+                o["frames"].append(have[s["id"], tau])
+        need = [x for x in need if (x[0]["id"], tau) not in have]
+        if not need:
+            continue
         try:
             grid = decode(grib(init, tau, box))
         except Exception as e:  # noqa: BLE001 - 一個時段失敗不影響其他時段
             errors.append(f"+{tau}h：{e}")
             continue
         valid = init + timedelta(hours=tau)
-        for s, t, o in zip(storms, tracks, out):
-            p = t.get(tau)
-            if not p:
-                continue
+        for s, t, o in need:
+            p = t[tau]
             try:
                 fr = shear_frame(grid, p[1], p[2])
             except FetchError as e:
@@ -343,8 +356,9 @@ def build(models: dict, prev: dict, outdir: Path, now: datetime, grib=None) -> d
         elif now - init > KEEP:
             result["models"][code] = {"name": MODELS[code]["name"], "init": m["init"], "complete": True, "storms": []}
         else:
-            tries = old.get("tries", 1) + 1 if old and old.get("init") == m["init"] else 1
-            new = build_model(code, m, outdir, grib and grib[code])
+            same = old and old.get("init") == m["init"]
+            tries = old.get("tries", 1) + 1 if same else 1
+            new = build_model(code, m, outdir, grib and grib[code], old if same else None)
             result["models"][code] = {**new, "tries": tries}
         e = result["models"].get(code)
         if e:
