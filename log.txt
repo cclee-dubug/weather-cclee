@@ -1,0 +1,24 @@
+gfs f000 200 429540
+gfs f024 200 409595
+ifs idx 0 200
+{"domain": "g", "date": "20261023", "time": "0000", "expver": "0001", "class": "od", "type": "fc", "stream": "oper", "levtype": "sfc", "step": "0", "param": "sf", "_offset": 0, "_length": 224}
+{"domain": "g", "date": "20261023", "time": "0000", "expver": "0001", "class": "od", "type": "fc", "stream": "oper", "step": "0", "levelist": "1", "levtype": "sol", "param": "vsw", "_offset": 224, "_length":
+ifs 0 fields 194 want [('v', '850', 629596), ('u', '850', 607292), ('u', '200', 593566), ('v', '200', 613573)]
+levels sample ['10', '100', '1000', '150', '200', '250', '300', '400', '50', '500', '600', '700', '850', '925']
+ifs idx 24 200
+{"domain": "g", "date": "20261023", "time": "0000", "expver": "0001", "class": "od", "type": "fc", "stream": "oper", "step": "24", "levelist": "2", "levtype": "sol", "param": "sot", "_offset": 0, "_length": 302968}
+{"domain": "g", "date": "20261023", "time": "0000", "expver": "0001", "class": "od", "type": "fc", "stream": "oper", "step": "24", "levtype": "sfc", "param": "msl", "_offset": 302968, "
+ifs 24 fields 191 want [('u', '200', 599492), ('v', '200', 500574), ('u', '850', 603870), ('v', '850', 626466)]
+levels sample ['10', '100', '1000', '150', '200', '250', '300', '400', '50', '500', '600', '700', '850', '925']
+coast lines 482 13318
+total 5780
+drwxr-xr-x 2 runner runner    4096 Oct 23 14:55 .
+drwxr-xr-x 3 runner runner    4096 Oct 23 14:55 ..
+-rw-r--r-- 1 runner runner  195638 Oct 23 14:55 coast_wpac.json
+-rw-r--r-- 1 runner runner  429540 Oct 23 14:55 gfs_f000.grib2
+-rw-r--r-- 1 runner runner  409595 Oct 23 14:55 gfs_f024.grib2
+-rw-r--r-- 1 runner runner 2444583 Oct 23 14:55 ifs_0.grib2
+-rw-r--r-- 1 runner runner   41917 Oct 23 14:55 ifs_0.index
+-rw-r--r-- 1 runner runner 2330938 Oct 23 14:55 ifs_24.grib2
+-rw-r--r-- 1 runner runner   41542 Oct 23 14:55 ifs_24.index
+-rw-r--r-- 1 runner runner    1340 Oct 23 14:55 log.txt
