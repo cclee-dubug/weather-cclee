@@ -32,13 +32,23 @@ def track_url(model: str, init: datetime, member: str) -> str:
     return f"{BASE}/{model}.{d}/{h}/tctrack/{member}.t{h}z.cyclone.trackatcfunix"
 
 
+def _get(url: str) -> str:
+    try:
+        return get_text(url)
+    except FetchError as e:
+        # NOMADS 對還沒產出的目錄回 403 而不是 404（2026-10-23 實測）
+        if str(e) == "HTTP 403":
+            raise NotFound(str(e)) from None
+        raise
+
+
 def _latest(model: str, first_member: str, now: datetime, known_init: str | None):
     """找出最新一次已產出的起報；與 known_init 相同時回傳 None。"""
     for init in candidate_inits(now):
         if known_init == iso_utc(init):
             return None
         try:
-            return init, get_text(track_url(model, init, first_member))
+            return init, _get(track_url(model, init, first_member))
         except NotFound:
             continue
     raise FetchError(f"NOMADS 找不到最近兩天的 {model.upper()} 路徑檔")
@@ -65,7 +75,7 @@ def fetch_gefs(now: datetime, known_init: str | None = None) -> dict | None:
         storms[sid] = {"id": sid, "name": None, "mean": techs.get("AEMN"), "members": []}
     for member in GEFS_MEMBERS:
         try:
-            parsed = adeck.parse(get_text(track_url("gefs", init, member)))
+            parsed = adeck.parse(_get(track_url("gefs", init, member)))
         except NotFound:  # 個別成員偶爾缺檔，略過即可
             continue
         for sid, techs in parsed["storms"].items():

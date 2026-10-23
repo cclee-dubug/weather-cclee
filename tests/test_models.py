@@ -69,6 +69,18 @@ class TestNcep(unittest.TestCase):
         self.assertEqual(len(champi["members"]), 1)  # 只有 ap01 有檔案
         self.assertEqual(champi["mean"][0][1:3], [23.8, 123.4])
 
+    def test_forbidden_means_not_yet(self):
+        # NOMADS 對還沒產出的 12Z 目錄回 403，要繼續往前找 06Z
+        def get_text(url):
+            if "/12/" in url:
+                raise FetchError("HTTP 403")
+            if "gfs.20261023/06" in url:
+                return text("gefs_aemn_sample.atcfunix").replace("AEMN", "AVNO")
+            raise NotFound("HTTP 404")
+        with mock.patch.object(ncep, "get_text", get_text):
+            out = ncep.fetch_gfs(NOW)
+        self.assertEqual(out["init"], "2026-10-23T06:00:00Z")
+
     def test_known_init_skips_download(self):
         with mock.patch.object(ncep, "get_text", self.fake({})) as _:
             self.assertIsNone(ncep.fetch_gfs(NOW, known_init="2026-10-23T12:00:00Z"))
