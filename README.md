@@ -10,7 +10,9 @@
 | 交通部中央氣象署（CWA） | [氣象資料開放平臺 W-C0034-005](https://opendata.cwa.gov.tw/dataset/warning/W-C0034-005) | 10 分鐘平均 |
 | 美軍聯合颱風警報中心（JTWC） | [JTWC 警報](https://www.metoc.navy.mil/jtwc/jtwc.html) | 1 分鐘平均 |
 
-背景地圖使用 Esri 海洋與衛星圖磚。地圖圖層：
+背景地圖使用 Esri 海洋與衛星圖磚。打開網頁時預設為衛星影像＋衛星雲圖＋海岸線，只顯示中央氣象署的路徑（颱風沒有氣象署資料時改顯示第一個有資料的機構），不顯示模式與前幾報。地圖圖層：
+
+- **海岸線**：Natural Earth 1:50m（`fetcher/coast_wpac.json`），亮黃色線加深色外框，畫在雲圖之上。
 
 - **海表面溫度**：[NASA GIBS](https://www.earthdata.nasa.gov/gibs) 的 GHRSST MUR 每日分析（通常比今天晚 1 到 2 天），在網頁上重新上色，26 °C 以上由黃轉橘、紅、粉紅。
 - **衛星雲圖**：[日本氣象廳](https://www.jma.go.jp/bosai/map.html#contents=himawari)向日葵衛星紅外線圖磚，每 10 分鐘換成最新一張。
