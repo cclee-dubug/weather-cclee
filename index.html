@@ -74,6 +74,24 @@
     <div class="map-wrap">
       <div id="map" aria-label="颱風路徑地圖"></div>
       <div class="map-empty" id="map-empty" hidden>目前西北太平洋沒有活躍的熱帶氣旋</div>
+      <div class="map-bar" id="map-bar">
+        <div class="bar-row">
+          <span class="bar-title">雲圖動畫</span>
+          <button type="button" class="icon-btn play" id="loop-play">▶ 播放</button>
+          <div class="segmented" id="loop-span" role="group" aria-label="動畫長度">
+            <button type="button" data-span="3" aria-pressed="true">3 小時</button>
+            <button type="button" data-span="6" aria-pressed="false">6 小時</button>
+          </div>
+          <span class="time-label" id="loop-label"></span>
+          <button type="button" class="icon-btn" id="center-storm" title="把地圖移到選取的颱風">以颱風為中心</button>
+        </div>
+        <div class="bar-row" id="fc-row">
+          <span class="bar-title">預報時間</span>
+          <button type="button" class="icon-btn play" id="fc-play">▶ 播放</button>
+          <input type="range" id="fc-time" min="0" max="120" step="3" value="0" aria-label="預報時間">
+          <span class="time-label" id="fc-label"></span>
+        </div>
+      </div>
     </div>
   </main>
 
