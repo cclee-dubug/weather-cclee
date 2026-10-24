@@ -17,23 +17,38 @@
 - **海表面溫度**：[NASA GIBS](https://www.earthdata.nasa.gov/gibs) 的 GHRSST MUR 每日分析（通常比今天晚 1 到 2 天），在網頁上重新上色，26 °C 以上由黃轉橘、紅、粉紅。
 - **衛星雲圖**：[日本氣象廳](https://www.jma.go.jp/bosai/map.html#contents=himawari)向日葵衛星紅外線圖磚，每 10 分鐘換成最新一張。
 - **BD 強化雲圖**：NASA GIBS 的向日葵 Band 13 紅外線（約晚 30 分鐘），還原成雲頂溫度後套用 Dvorak 分析用的 BD 色階。日本氣象廳的圖磚在 -70 °C 左右就全白，分不出 BD 色階最重要的 -70～-80 °C，所以這張改用 GIBS。
-- **系集路徑密度**：GEFS 或 EPS 各成員颱風中心通過某地 120 公里內的比例（與 ECMWF 侵襲機率的定義相同），在網頁上由成員路徑計算。
+- **系集路徑密度**：任選一個系集（或「所有系集合併」）各成員颱風中心通過某地 120 公里內的比例（與 ECMWF 侵襲機率的定義相同），在網頁上由成員路徑計算。
 
 GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormaps.json` 對照表還原數值後再上色。對照表由 `tools/gibs_colormap.py` 從 GIBS 色標檔產生，GIBS 改版色標時重跑即可。
 
-模式預報（側欄「模式預報」可個別開關）：
+模式預報（側欄「模式預報」分成全球模式、颶風模式、AI 模式三類，各分決定性與系集，可個別開關）：
 
-| 模式 | 類型 | 資料 | 更新 |
-|---|---|---|---|
-| NCEP GFS | 決定性 | [NOAA NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/) 颱風追蹤產品 | 每 6 小時 |
-| NCEP GEFS | 系集（平均＋31 成員） | 同上 | 每 6 小時 |
-| ECMWF IFS | 決定性 | [ECMWF 開放資料](https://www.ecmwf.int/en/forecasts/datasets/open-data)（CC BY 4.0）颱風路徑 BUFR | 每 12 小時（00Z／12Z） |
-| ECMWF EPS | 系集（平均＋51 成員） | 同上 | 每 12 小時（00Z／12Z） |
+| 分類 | 模式 | 類型 | 資料 | 更新 |
+|---|---|---|---|---|
+| 全球模式 | NCEP GFS | 決定性 | [NOAA NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/) 颱風追蹤產品 | 每 6 小時 |
+| 全球模式 | 加拿大 GDPS（CMC） | 決定性 | 同上（cmce 目錄） | 每 12 小時 |
+| 全球模式 | 美國海軍 NAVGEM | 決定性 | 同上（fens 目錄） | 每 12 小時 |
+| 全球模式 | ECMWF IFS | 決定性 | [ECMWF 開放資料](https://www.ecmwf.int/en/forecasts/datasets/open-data)（CC BY 4.0）颱風路徑 BUFR | 每 12 小時 |
+| 全球模式 | NCEP GEFS | 系集（平均＋31 成員） | NOMADS | 每 6 小時 |
+| 全球模式 | ECMWF EPS | 系集（平均＋51 成員） | ECMWF 開放資料 | 每 12 小時 |
+| 全球模式 | 加拿大 GEPS | 系集（平均＋21 成員） | NOMADS | 每 12 小時 |
+| 全球模式 | 美國海軍 FNMOC 系集 | 系集（平均＋21 成員） | NOMADS | 每 12 小時 |
+| 颶風模式 | NOAA HAFS-A | 決定性 | [NOMADS HAFS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/hafs/prod/) | 每 6 小時（有颱風時） |
+| AI 模式 | ECMWF AIFS | 決定性 | ECMWF 開放資料 | 每 6 小時 |
+| AI 模式 | NOAA AIGFS | 決定性 | NOMADS | 每 6 小時 |
+| AI 模式 | ECMWF AIFS 系集 | 系集（平均＋51 成員） | ECMWF 開放資料 | 每 6 小時 |
+| AI 模式 | NOAA AIGEFS | 系集（平均＋31 成員） | NOMADS | 每 6 小時 |
+| AI 模式 | NOAA HGEFS（GEFS＋AIGEFS 混合） | 系集平均 | NOMADS | 每 6 小時 |
+| AI 模式 | Google WeatherNext 3（WNV3） | 系集（平均＋64 成員） | [Google DeepMind Weather Lab](https://deepmind.google.com/science/weatherlab) | 每 6 小時 |
+| AI 模式 | Google FNV3 | 系集（平均＋50 成員） | 同上 | 每 6 小時 |
+| AI 模式 | Google GenCast | 系集（平均＋50 成員） | 同上 | 每 6 小時 |
+
+Google 模式的路徑：未來時間的資料適用 [Google 實驗性即時資料使用條款](https://storage.googleapis.com/weathernext-public/terms-of-use.pdf)，過去時間的資料為 CC BY 4.0。本站只轉換格式與上色、未修改數值，網頁頁尾附上 Google 的著作權、條款連結與免責聲明；本站與 Google 及各氣象機構無關。`models.json` 的 `notices` 欄位記錄各來源的授權說明。
 
 地圖上的模式選項：
 
 - **路徑顏色**：可切換「依模式」或「依強度」。依強度時用模式的近中心最大風速，以 Saffir-Simpson 等級上色（TD、TS、1～5 級）；模式風速是網格平均，強颱風常被低估，只看相對變化。
-- **系集 70% 機率橢圓**：每 24 小時（到 120 小時）用 GEFS／EPS 各成員的颱風中心位置算平均與共變異數，畫出涵蓋約 70% 成員的橢圓（二維常態分布、馬氏距離平方 ≤ −2 ln 0.3）。成員少於 5 個的時間不畫。
+- **系集 70% 機率橢圓**：每 24 小時（到 120 小時）每個開啟中的系集分別用各成員的颱風中心位置算平均與共變異數，畫出涵蓋約 70% 成員的橢圓（二維常態分布、馬氏距離平方 ≤ −2 ln 0.3）。成員少於 5 個的時間不畫。
 - **前幾報預報**：顯示前 2、4 或 6 報的官方預報（每 6 小時時段取最後一報）與模式前幾次起報（決定性路徑與系集平均），以淡色虛線疊在地圖與強度圖上。歷史由 `fetcher/history.py` 保存在 `latest.json` 各機構的 `previous` 與 `models.json` 各模式的 `previous`，只留 72 小時內。
 
 地圖上方的控制列：

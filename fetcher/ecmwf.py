@@ -3,7 +3,9 @@
   https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/{YYYYMMDD}/{HH}z/ifs/0p25/{oper|enfo}/
       {YYYYMMDD}{HH}0000-{step}h-{oper|enfo}-tf.bufr
 
-oper 是決定性模式（IFS），enfo 是系集（EPS，51 個成員）。每則 BUFR 訊息是一個颱風，
+oper 是決定性模式（IFS），enfo 是系集（EPS，51 個成員）。AI 模式 AIFS 的路徑檔格式相同，放在
+.../{HH}z/aifs-single/0p25/oper/（決定性）與 .../{HH}z/aifs-ens/0p25/enfo/（系集），每 6 小時一次、
+都到 360 小時（2026-10-24 在 GitHub Actions 上確認）。每則 BUFR 訊息是一個颱風，
 系集的 51 個成員是同一則訊息裡的 51 個 subset。解碼需要 eccodes（pip install eccodes），
 只有這個模組用到，其他來源仍只用標準函式庫。
 
@@ -25,18 +27,18 @@ MISSING = -1e99  # eccodes 以 -1e100 表示缺值
 MS_PER_KT = 0.514444
 
 
-def url(stream: str, init: datetime, step: str) -> str:
+def url(stream: str, init: datetime, step: str, model: str = "ifs") -> str:
     d, h = init.strftime("%Y%m%d"), init.strftime("%H")
-    return f"{BASE}/{d}/{h}z/ifs/0p25/{stream}/{d}{h}0000-{step}-{stream}-tf.bufr"
+    return f"{BASE}/{d}/{h}z/{model}/0p25/{stream}/{d}{h}0000-{step}-{stream}-tf.bufr"
 
 
-def candidate_inits(now: datetime, count: int = 4):
-    """最新的 00Z／12Z 起報時間往回數（開放資料的路徑檔只用這兩個時次，預報最長）。"""
+def candidate_inits(now: datetime, count: int = 4, cycle: int = 12):
+    """最新的起報時間往回數。IFS 只用 00Z／12Z（06Z／18Z 的路徑檔只到 144 小時），AIFS 每 6 小時。"""
     t = now.replace(minute=0, second=0, microsecond=0)
-    t -= timedelta(hours=t.hour % 12)
+    t -= timedelta(hours=t.hour % cycle)
     for _ in range(count):
         yield t
-        t -= timedelta(hours=12)
+        t -= timedelta(hours=cycle)
 
 
 def _arr(codes, h, key):
@@ -137,15 +139,16 @@ def _download(u: str, tries: int = 3) -> bytes:
     raise FetchError("unreachable")
 
 
-def fetch(stream: str, now: datetime, known_init: str | None = None) -> dict | None:
+def fetch(stream: str, now: datetime, known_init: str | None = None, model: str = "ifs") -> dict | None:
     """抓最新一次起報的路徑，只留西北太平洋。最新一次就是 known_init 時回傳 None（不必重抓）。"""
     last_error = None
-    for init in candidate_inits(now):
+    ai = model != "ifs"
+    for init in candidate_inits(now, 8 if ai else 4, 6 if ai else 12):
         if known_init == iso_utc(init):
             return None
-        for step in STEPS[stream]:
+        for step in ("360h",) if ai else STEPS[stream]:
             try:
-                data = _download(url(stream, init, step))
+                data = _download(url(stream, init, step, model))
             except NotFound:
                 continue
             except FetchError as e:
