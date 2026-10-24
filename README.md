@@ -28,6 +28,12 @@ GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormap
 | ECMWF IFS | 決定性 | [ECMWF 開放資料](https://www.ecmwf.int/en/forecasts/datasets/open-data)（CC BY 4.0）颱風路徑 BUFR | 每 12 小時（00Z／12Z） |
 | ECMWF EPS | 系集（平均＋51 成員） | 同上 | 每 12 小時（00Z／12Z） |
 
+地圖上的模式選項：
+
+- **路徑顏色**：可切換「依模式」或「依強度」。依強度時用模式的近中心最大風速，以 Saffir-Simpson 等級上色（TD、TS、1～5 級）；模式風速是網格平均，強颱風常被低估，只看相對變化。
+- **系集 70% 機率橢圓**：每 24 小時（到 120 小時）用 GEFS／EPS 各成員的颱風中心位置算平均與共變異數，畫出涵蓋約 70% 成員的橢圓（二維常態分布、馬氏距離平方 ≤ −2 ln 0.3）。成員少於 5 個的時間不畫。
+- **前幾報預報**：顯示前 2、4 或 6 報的官方預報（每 6 小時時段取最後一報）與模式前幾次起報（決定性路徑與系集平均），以淡色虛線疊在地圖與強度圖上。歷史由 `fetcher/history.py` 保存在 `latest.json` 各機構的 `previous` 與 `models.json` 各模式的 `previous`，只留 72 小時內。
+
 **模式天氣圖**（`model.html`）：以各模式自己預報的颱風位置為中心，畫出 0 到 120 小時每 6 小時一張的天氣圖，GFS 與 IFS 依有效時間並排比較。目前有：
 
 - **200–850 hPa 環境垂直風切（去除渦旋）**：GFS 從 [NOMADS grib filter](https://nomads.ncep.noaa.gov/gribfilter.php?ds=gfs_0p25) 只下載 850～200 hPa 八層的 u、v；IFS 從 ECMWF 開放資料依 `.index` 以 HTTP Range 只下載這些場。颱風中心 500 公里內的渦度與輻散用 Green 函數反推風場後扣除（Davis et al. 2008 的方法，`fetcher/vortex.py`），剩下的環境風場再相減；另算 500 公里內的平均風切（與 SHIPS 的 SHDC 定義相同）。

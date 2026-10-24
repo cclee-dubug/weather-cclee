@@ -121,7 +121,12 @@ h3 { font-size: 13px; margin: 16px 0 6px; color: var(--text-2); }
 }
 .agency-chip[aria-pressed="false"] { opacity: 0.45; }
 .agency-chip .stale { color: var(--muted); font-size: 11px; }
-.layer-toggles { display: flex; gap: 16px; margin-top: 10px; color: var(--text-2); font-size: 13px; }
+.layer-toggles { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; color: var(--text-2); font-size: 13px; }
+.option-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; }
+.option-row .group-label { color: var(--muted); font-size: 12px; }
+.layer-legend .tc-scale { display: grid; grid-template-columns: repeat(7, auto); gap: 2px 8px; margin-top: 4px; font-size: 11px; color: var(--text-2); }
+.layer-legend .tc-scale i { display: block; height: 6px; border-radius: 3px; margin-bottom: 1px; }
+.leaflet-tooltip.hour-label { font-size: 10px; font-weight: 600; padding: 0 3px; line-height: 14px; }
 
 .model-toggles { display: grid; gap: 6px; }
 .model-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

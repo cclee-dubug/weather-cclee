@@ -3,7 +3,8 @@
 用法：python -m fetcher.models 上一版.json 輸出.json
 
 模式每天只更新 2 到 4 次，而且系集資料較大，所以和官方預報分開成另一個檔案，
-由另一個 workflow 推到 model-data 分支（只保留最新一版，不累積歷史）。
+由另一個 workflow 推到 model-data 分支（強制推送，git 不累積歷史）。
+前幾次起報的路徑放在各模式的 previous（見 history.py），網頁用來比較預報的修正。
 某個模式這次抓不到時，沿用上一版（48 小時內）並標示錯誤。
 """
 
@@ -14,7 +15,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import ecmwf, ncep
+from . import ecmwf, history, ncep
 from .common import iso_utc, parse_iso
 
 KEEP = timedelta(hours=48)
@@ -88,6 +89,9 @@ def build(prev: dict, now: datetime, models=MODELS) -> dict:
                 entry = {"status": "error", "message": msg, "init": None, "storms": []}
         else:
             entry = old if new is None else {"status": "ok", **new}
+        previous = history.model_history(old, entry.get("init"), now)
+        if previous or "previous" in old:
+            entry = {**entry, "previous": previous}
         out["models"][code] = {"name": name, "kind": kind, **{k: v for k, v in entry.items() if k not in ("name", "kind")}}
         m = out["models"][code]
         print(f"[{code}] {m['status']} {m.get('init')} {len(m.get('storms') or [])} 個系統 {m.get('message', '')}".rstrip())
