@@ -24,6 +24,7 @@ import re
 import sys
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -39,6 +40,7 @@ HALF_LAT, HALF_LON = 10.0, 13.0  # 圖的範圍：中心上下 10 度、左右 1
 MARGIN = 1.0  # 計算渦度需要的外圍
 SMOOTH = 2.0  # 風切場的高斯平滑，格點數（0.25 度網格）
 MAX_STORMS = 6
+DOWNLOAD_WORKERS = 4
 KEEP = timedelta(hours=48)
 NOMADS_FILTER = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
 COAST = Path(__file__).with_name("coast_wpac.json")
@@ -135,10 +137,11 @@ def _merge_ranges(rows) -> list[tuple[int, int]]:
 def ifs_grib(init: datetime, tau: int, box=None) -> bytes:
     d, h = init.strftime("%Y%m%d"), init.strftime("%H")
     error = None
-    for mirror in IFS_MIRRORS:
+    for k, mirror in enumerate(IFS_MIRRORS):
         base = f"{mirror}/{d}/{h}z/ifs/0p25/oper/{d}{h}0000-{tau}h-oper-fc"
+        tries = 2 if k < len(IFS_MIRRORS) - 1 else 4  # 前面的來源限流時早點換下一個
         try:
-            index = _fetch(base + ".index").decode("utf-8", errors="replace")
+            index = _fetch(base + ".index", tries=tries).decode("utf-8", errors="replace")
             rows = [json.loads(line) for line in index.splitlines() if line.startswith("{")]
             want = [r for r in rows if r.get("levtype") == "pl" and r.get("param") in ("u", "v")
                     and r.get("levelist") in {str(p) for p in LEVELS}]
@@ -146,7 +149,7 @@ def ifs_grib(init: datetime, tau: int, box=None) -> bytes:
                 raise FetchError(f"IFS +{tau}h 的索引裡找不到全部的 u、v")
             parts = []
             for offset, length in _merge_ranges(want):
-                parts.append(_fetch(base + ".grib2", offset, length))
+                parts.append(_fetch(base + ".grib2", offset, length, tries=tries))
                 time.sleep(0.3)  # 放慢一點，比較不會被限流
             return b"".join(parts)
         except FetchError as e:
@@ -396,7 +399,19 @@ def build_model(code: str, entry: dict, outdir: Path, grib=None, done: dict | No
     errors = []
     taus = sorted({tau for t in tracks for tau in t})
     box = _box(tracks) if tracks else None
-    for tau in taus:
+
+    # 下載比繪圖慢（IFS 每個時段要十幾次 Range 請求），先以幾條執行緒同時下載，邊下載邊畫
+    def get(tau):
+        if all((s["id"], tau) in have for s, t in zip(storms, tracks) if tau in t):
+            return None
+        try:
+            return grib(init, tau, box)
+        except Exception as e:  # noqa: BLE001 - 一個時段失敗不影響其他時段
+            return e
+
+    pool = ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS)
+    downloads = pool.map(get, taus)
+    for tau, data in zip(taus, downloads):
         need = [(s, t, o) for s, t, o in zip(storms, tracks, out) if tau in t]
         for s, t, o in need:
             if (s["id"], tau) in have:
@@ -405,7 +420,9 @@ def build_model(code: str, entry: dict, outdir: Path, grib=None, done: dict | No
         if not need:
             continue
         try:
-            grid = decode(grib(init, tau, box))
+            if isinstance(data, Exception):
+                raise data
+            grid = decode(data)
         except Exception as e:  # noqa: BLE001 - 一個時段失敗不影響其他時段
             errors.append(f"+{tau}h：{e}")
             continue
@@ -430,6 +447,7 @@ def build_model(code: str, entry: dict, outdir: Path, grib=None, done: dict | No
                 maps[key] = {"img": img, "kt": round(pr["kt"], 1), "dir": round(pr["dir"]) % 360}
             o["frames"].append({"tau": tau, "valid": iso_utc(valid), "lat": p[1], "lon": p[2], "maps": maps})
         print(f"[{code}] +{tau}h 完成", flush=True)
+    pool.shutdown()
     return {"name": MODELS[code]["name"], "init": entry["init"], "complete": not errors,
             "errors": errors[:5], "storms": out}
 

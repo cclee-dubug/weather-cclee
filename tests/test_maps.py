@@ -95,7 +95,7 @@ class IfsDownloadTest(unittest.TestCase):
             for i, (p, lev) in enumerate(rows))
         urls, ranges = [], []
 
-        def fake(url, offset=None, length=None):
+        def fake(url, offset=None, length=None, tries=4):
             urls.append(url)
             if url.startswith(maps.IFS_MIRRORS[0]):
                 raise maps.FetchError("HTTPError: HTTP Error 503: Slow Down")
