@@ -17,16 +17,36 @@
 
   // 模式路徑另存在 model-data 分支（每小時更新、不保留歷史），從 GitHub 原始檔網址讀取
   const MODELS_URL = "https://raw.githubusercontent.com/cclee-dubug/weather-cclee/model-data/models.json";
-  // 同一家的決定性與系集用同一個顏色，以線型與地圖上的文字標籤區分
+  // 同一家的決定性與系集用同一個顏色，以線型與地圖上的文字標籤區分。
+  // 名稱、類型、分類、成員數以 models.json 為準（fetcher/models.py），這裡只補簡稱與顏色
   const MODELS = {
-    gfs: { name: "NCEP GFS", short: "GFS", family: "ncep", kind: "deterministic" },
-    ifs: { name: "ECMWF IFS", short: "IFS", family: "ecmwf", kind: "deterministic" },
-    gefs: { name: "NCEP GEFS", short: "GEFS", family: "ncep", kind: "ensemble" },
-    eps: { name: "ECMWF EPS", short: "EPS", family: "ecmwf", kind: "ensemble" },
+    gfs: { short: "GFS", family: "ncep" },
+    ifs: { short: "IFS", family: "ecmwf" },
+    cmc: { short: "CMC", family: "cmc" },
+    ngx: { short: "NAVGEM", family: "navy" },
+    gefs: { short: "GEFS", family: "ncep" },
+    eps: { short: "EPS", family: "ecmwf" },
+    cmce: { short: "GEPS", family: "cmc" },
+    fens: { short: "FENS", family: "navy" },
+    hfsa: { short: "HAFS-A", family: "hafs" },
+    aifs: { short: "AIFS", family: "ecmwfai" },
+    aigfs: { short: "AIGFS", family: "noaaai" },
+    aifse: { short: "AIFS-ENS", family: "ecmwfai" },
+    aigefs: { short: "AIGEFS", family: "noaaai" },
+    hgefs: { short: "HGEFS", family: "noaaai" },
+    wnv3: { short: "WNV3", family: "wnv3" },
+    fnv3: { short: "FNV3", family: "fnv3" },
+    genc: { short: "GenCast", family: "genc" },
   };
-  const MODEL_GROUPS = [["決定性模式", ["gfs", "ifs"]], ["系集模式", ["gefs", "eps"]]];
-  // 系集成員數（GEFS：控制組＋30 個擾動成員；EPS：控制組＋50），沒追到這個颱風的成員也算在分母
-  const ENSEMBLE_SIZE = { gefs: 31, eps: 51 };
+  const CATEGORIES = [["global", "全球模式"], ["hurricane", "颶風模式"], ["ai", "AI 模式"]];
+  // models.json 裡的模式資訊加上簡稱與顏色；不認得的新模式用代號當簡稱
+  function modelMeta(code) {
+    const m = state.models?.models?.[code] || {};
+    return { short: code.toUpperCase(), family: "ncep", name: m.name, kind: m.kind, category: m.category, ...MODELS[code] };
+  }
+  const modelCodes = () => Object.keys(state.models?.models || {});
+  // 系集成員數（例如 GEFS 為控制組＋30 個擾動成員），沒追到這個颱風的成員也算在分母
+  const ensembleSize = (code, members) => Math.max(state.models?.models?.[code]?.size || 0, members?.length || 0);
   // 模式路徑依強度上色用的分級（kt，Saffir-Simpson 颶風風力等級）。模式風速是網格平均，
   // 強颱風常被低估，只看相對變化
   const TC_SCALE = [
@@ -325,8 +345,8 @@
         `<div class="tc-scale">${TC_SCALE.map(([, c, short, title]) => `<span title="${title}"><i style="background:${c}"></i>${short}</span>`).join("")}</div>`);
     }
     if (densityInfo) {
-      const meta = MODELS[densityInfo.code];
-      parts.push(`<div><b>路徑密度</b> <span class="muted">${meta.short}，${fmt(densityInfo.init)} 起報</span></div>` +
+      const title = densityInfo.code === "all" ? "所有系集合併" : `${modelMeta(densityInfo.code).short}，${fmt(densityInfo.init)} 起報`;
+      parts.push(`<div><b>路徑密度</b> <span class="muted">${title}</span></div>` +
         TcRaster.densityLegendHtml() +
         `<div class="muted">${densityInfo.members} 個成員中，颱風中心通過該處 ${TcRaster.DENSITY_RADIUS_KM} 公里內的比例（%，整個預報期間，5% 以下不顯示）</div>`);
     }
@@ -456,7 +476,7 @@
   }
   /* ---------- 模式路徑 ---------- */
 
-  const modelColor = (code) => css(`--model-${MODELS[code].family}`);
+  const modelColor = (code) => css(`--model-${modelMeta(code).family}`) || css("--model-ncep");
   const matchModelStorm = (code, storm) => TcCommon.matchModelStorm(state.models?.models?.[code], storm);
 
   function modelTip(code, init, p, label) {
@@ -563,7 +583,7 @@
 
   function drawEllipses(code, init, members) {
     const c = modelColor(code);
-    const size = ENSEMBLE_SIZE[code];
+    const size = ensembleSize(code, members);
     for (const tau of ELLIPSE_TAUS) {
       const pos = members.map((m) => memberPos(m, tau)).filter(Boolean);
       if (pos.length < ELLIPSE_MIN_MEMBERS) continue;
@@ -571,7 +591,7 @@
       const valid = fmt(new Date(Date.parse(init) + tau * 3600e3).toISOString());
       L.polygon(e.pts, { color: c, weight: 1.8, opacity: 0.9, fillColor: c, fillOpacity: 0.08 })
         .bindTooltip([
-          `<b>${MODELS[code].short} 70% 機率橢圓</b> +${tau} 小時`,
+          `<b>${modelMeta(code).short} 70% 機率橢圓</b> +${tau} 小時`,
           `${valid}　中心 ${e.center[0].toFixed(1)}°N ${e.center[1].toFixed(1)}°E`,
           `長軸半徑約 ${Math.round(e.a)} km，短軸約 ${Math.round(e.b)} km`,
           `${pos.length} / ${size} 個成員在這個時間仍追得到颱風`,
@@ -584,15 +604,18 @@
     }
   }
 
+  const drawOrder = () => [...modelCodes().filter((c) => modelMeta(c).kind === "ensemble"),
+    ...modelCodes().filter((c) => modelMeta(c).kind !== "ensemble")];
+
   function drawModels(storm) {
     intensityLegend = false;
-    for (const code of ["gefs", "eps", "gfs", "ifs"]) {  // 系集先畫，決定性模式疊在上面
+    for (const code of drawOrder()) {  // 系集先畫，決定性模式疊在上面
       if (!state.modelOn.has(code)) continue;
       const ms = matchModelStorm(code, storm);
       if (!ms) continue;
       if (state.trackColor === "intensity") intensityLegend = true;
       const init = state.models.models[code].init;
-      const meta = MODELS[code];
+      const meta = modelMeta(code);
       if (meta.kind === "deterministic") {
         drawModelLine(code, init, ms.track || [], meta.short, false);
         continue;
@@ -648,11 +671,11 @@
       });
     }
     if (!state.models) return;
-    for (const code of ["gfs", "ifs", "gefs", "eps"]) {
+    for (const code of modelCodes()) {
       const m = state.models.models?.[code];
       if (!state.modelOn.has(code) || !m) continue;
       const runs = (m.previous || []).slice(0, state.prevCount);
-      const meta = MODELS[code];
+      const meta = modelMeta(code);
       const label = meta.kind === "ensemble" ? `${meta.short} 平均` : meta.short;
       runs.forEach((run, i) => {
         const ms = TcCommon.matchModelStorm(run, storm);
@@ -667,18 +690,34 @@
     }
   }
 
-  // 路徑密度圖層只在颱風、模式或起報時間改變時重算
+  // 有成員路徑、可以算密度與機率橢圓的系集
+  const densityCodes = (storm) => modelCodes().filter((c) => modelMeta(c).kind === "ensemble" && matchModelStorm(c, storm)?.members?.length);
+
+  // 路徑密度圖層只在颱風、模式或起報時間改變時重算。"all" 是所有系集成員合併（每個成員權重相同）
   function drawDensity(storm) {
     const code = state.density;
-    const ms = storm && MODELS[code] ? matchModelStorm(code, storm) : null;
-    const init = ms ? state.models.models[code].init : null;
-    const key = ms ? `${code}|${init}|${ms.id}` : null;
+    let members = null, size = 0, key = null, init = null;
+    if (storm && state.models && code !== "off") {
+      const codes = code === "all" ? densityCodes(storm) : densityCodes(storm).filter((c) => c === code);
+      if (codes.length) {
+        members = [];
+        const parts = [];
+        for (const c of codes) {
+          const ms = matchModelStorm(c, storm);
+          members.push(...ms.members);
+          size += ensembleSize(c, ms.members);
+          parts.push(`${c}:${state.models.models[c].init}:${ms.id}`);
+        }
+        init = code === "all" ? null : state.models.models[code].init;
+        key = `${code}|${parts.join(",")}`;
+      }
+    }
     if (key !== densityKey) {
       if (densityLayer) map.removeLayer(densityLayer);
       densityLayer = null;
       densityKey = key;
       densityInfo = null;
-      const grid = ms && TcRaster.trackDensity(ms.members || [], ENSEMBLE_SIZE[code]);
+      const grid = members && TcRaster.trackDensity(members, size);
       if (grid) {
         densityLayer = new TcRaster.DensityLayer({ pane: "density", grid }).addTo(map);
         densityInfo = { code, init, members: grid.members };
@@ -883,14 +922,14 @@
     const tag = (ll, html) => L.tooltip({ permanent: true, direction: "right", offset: [9, 0], className: "model-label time-tag" })
       .setLatLng(ll).setContent(html).addTo(timeLayer);
 
-    for (const code of ["gefs", "eps", "gfs", "ifs"]) {
+    for (const code of drawOrder()) {
       if (!state.modelOn.has(code)) continue;
       const ms = matchModelStorm(code, storm);
       if (!ms) continue;
       const init = state.models.models[code].init;
       const tau = (t - Date.parse(init)) / 3600e3;
       const c = modelColor(code);
-      const meta = MODELS[code];
+      const meta = modelMeta(code);
       for (const m of ms.members || []) {
         const p = modelAt(m, tau);
         if (p) L.circleMarker([p[1], p[2]], { radius: 3, stroke: false, fillColor: c, fillOpacity: 0.75, interactive: false }).addTo(timeLayer);
@@ -1004,35 +1043,46 @@
       box.innerHTML = `<p class="note">${state.modelsFailed ? "模式資料載入失敗，稍後自動重試" : "模式資料載入中…"}</p>`;
       return;
     }
-    box.innerHTML = MODEL_GROUPS.map(([title, codes]) => `<div class="model-group"><span class="group-label">${title}</span>` +
-      codes.map((code) => {
-        const m = state.models.models?.[code];
-        const meta = MODELS[code];
-        const has = m && matchModelStorm(code, storm);
-        let sub;
-        if (!m || !m.init) sub = "無資料";
-        else if (!has) sub = "沒有這個颱風";
-        else sub = `${fmt(m.init)} 起報`;
-        const warn = m?.status === "error" ? `<span class="stale" title="${esc(m.message || "")}">更新失敗</span>` : "";
-        const swatch = `<svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${modelColor(code)}" stroke-width="3" stroke-linecap="round"${meta.kind === "ensemble" ? ' stroke-dasharray="1 5"' : ""}/></svg>`;
-        return `<button type="button" class="agency-chip model-chip" data-model="${code}" aria-pressed="${state.modelOn.has(code)}"${has ? "" : " data-empty"}>
-          ${swatch}<span>${meta.short}</span><span class="sub">${sub}</span>${warn}</button>`;
-      }).join("") + `</div>`).join("") +
+    const chip = (code) => {
+      const m = state.models.models[code];
+      const meta = modelMeta(code);
+      const has = m && matchModelStorm(code, storm);
+      let sub;
+      if (!m.init) sub = "無資料";
+      else if (!has) sub = "沒有這個颱風";
+      else sub = `${fmt(m.init)} 起報`;
+      const warn = m.status === "error" ? `<span class="stale" title="${esc(m.message || "")}">更新失敗</span>` : "";
+      const swatch = `<svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${modelColor(code)}" stroke-width="3" stroke-linecap="round"${meta.kind === "ensemble" ? ' stroke-dasharray="1 5"' : ""}/></svg>`;
+      return `<button type="button" class="agency-chip model-chip" data-model="${code}" aria-pressed="${state.modelOn.has(code)}"${has ? "" : " data-empty"} title="${esc(meta.name || meta.short)}">
+        ${swatch}<span>${esc(meta.short)}</span><span class="sub">${sub}</span>${warn}</button>`;
+    };
+    const groups = CATEGORIES.map(([cat, title]) => {
+      const codes = modelCodes().filter((c) => (modelMeta(c).category || "global") === cat);
+      if (!codes.length) return "";
+      const det = codes.filter((c) => modelMeta(c).kind !== "ensemble");
+      const ens = codes.filter((c) => modelMeta(c).kind === "ensemble");
+      return `<div class="model-category"><h4>${title}</h4>` +
+        (det.length ? `<div class="model-group"><span class="group-label">決定性</span>${det.map(chip).join("")}</div>` : "") +
+        (ens.length ? `<div class="model-group"><span class="group-label">系集（點線為平均）</span>${ens.map(chip).join("")}</div>` : "") +
+        `</div>`;
+    }).join("");
+    const dens = densityCodes(storm);
+    if (state.density !== "off" && state.density !== "all" && !dens.includes(state.density)) state.density = "off";
+    const options = [["off", "關閉"], ...dens.map((c) => [c, modelMeta(c).short]), ...(dens.length > 1 ? [["all", "所有系集合併"]] : [])];
+    box.innerHTML = groups +
       `<div class="model-group"><span class="group-label">系集路徑密度</span>
-        <div class="segmented" role="group" aria-label="系集路徑密度">` +
-      [["off", "關閉"], ["gefs", "GEFS"], ["eps", "EPS"]].map(([k, label]) => {
-        const empty = k !== "off" && !matchModelStorm(k, storm);
-        return `<button type="button" data-density="${k}" aria-pressed="${state.density === k}"${empty ? ' disabled title="這個颱風沒有此模式的資料"' : ""}>${label}</button>`;
-      }).join("") + `</div></div>`;
+        <select id="density-select" aria-label="系集路徑密度">` +
+      options.map(([k, label]) => `<option value="${k}"${state.density === k ? " selected" : ""}>${esc(label)}</option>`).join("") +
+      `</select></div>`;
     box.querySelectorAll(".model-chip").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.model;
       state.modelOn.has(k) ? state.modelOn.delete(k) : state.modelOn.add(k);
       render();
     }));
-    box.querySelectorAll("[data-density]").forEach((b) => b.addEventListener("click", () => {
-      state.density = b.dataset.density;
+    $("density-select").addEventListener("change", (e) => {
+      state.density = e.target.value;
       render();
-    }));
+    });
   }
 
   let chart = null;

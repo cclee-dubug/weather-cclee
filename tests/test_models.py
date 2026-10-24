@@ -150,14 +150,14 @@ class TestModelsBuild(unittest.TestCase):
         def boom(now, known):
             raise FetchError("HTTP 503")
 
-        out = models.build(prev, NOW, {"gfs": ("NCEP GFS", "deterministic", boom)})
+        out = models.build(prev, NOW, {"gfs": ("NCEP GFS", "deterministic", "global", None, boom)})
         gfs = out["models"]["gfs"]
         self.assertEqual(gfs["status"], "error")
         self.assertEqual(gfs["storms"], [{"id": "29W"}])
         self.assertIn("沿用上次", gfs["message"])
 
     def test_unchanged_run_keeps_entry(self):
-        prev = {"models": {"ifs": {"name": "ECMWF IFS", "kind": "deterministic", "status": "ok",
+        prev = {"models": {"ifs": {"name": "ECMWF IFS", "kind": "deterministic", "category": "global", "status": "ok",
                                    "init": "2026-10-23T00:00:00Z", "storms": []}}}
         seen = []
 
@@ -165,7 +165,7 @@ class TestModelsBuild(unittest.TestCase):
             seen.append(known)
             return None
 
-        out = models.build(prev, NOW, {"ifs": ("ECMWF IFS", "deterministic", same)})
+        out = models.build(prev, NOW, {"ifs": ("ECMWF IFS", "deterministic", "global", None, same)})
         self.assertEqual(seen, ["2026-10-23T00:00:00Z"])
         self.assertEqual(models._content(out), models._content(prev))
 
