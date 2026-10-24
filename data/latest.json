@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-24T02:44:14Z",
+ "checked_at": "2026-10-24T03:24:24Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -720,7 +720,8 @@
        "r_gale_km": null,
        "r_storm_km": null
       }
-     ]
+     ],
+     "previous": []
     },
     "cwa": {
      "id": "TD33",
@@ -1417,7 +1418,8 @@
        "r_gale_km": null,
        "r_storm_km": null
       }
-     ]
+     ],
+     "previous": []
     },
     "jtwc": {
      "id": "wp2926",
@@ -1549,7 +1551,8 @@
        "gust_kt": 40.0,
        "pres_hpa": null
       }
-     ]
+     ],
+     "previous": []
     }
    }
   },
@@ -1703,7 +1706,8 @@
        "r_gale_km": null,
        "r_storm_km": null
       }
-     ]
+     ],
+     "previous": []
     },
     "jtwc": {
      "id": "wp3026",
@@ -1967,7 +1971,8 @@
         }
        }
       }
-     ]
+     ],
+     "previous": []
     }
    }
   }
@@ -1984,5 +1989,5 @@
    "checked_at": "2026-10-24T00:44:14Z"
   }
  },
- "updated_at": "2026-10-24T02:44:14Z"
+ "updated_at": "2026-10-24T03:24:24Z"
 }
