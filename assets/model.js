@@ -28,7 +28,8 @@
   const $ = (id) => document.getElementById(id);
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const mapOf = (f) => f.maps?.[state.product];
-  const imgUrl = (f) => `${MAPS_BASE}/${mapOf(f).img}`;
+  // 重畫過的圖網址不變，加上索引的更新時間避免瀏覽器沿用舊圖
+  const imgUrl = (f) => `${MAPS_BASE}/${mapOf(f).img}?v=${encodeURIComponent(state.index?.updated_at || "")}`;
   const label = (ms) => (ms.name && ms.name !== ms.id ? `${ms.name}（${ms.id}）` : ms.id);
 
   // 兩個模式的系統在同一有效時間相距 400 公里內，就當成同一個
