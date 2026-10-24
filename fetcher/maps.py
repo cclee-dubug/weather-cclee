@@ -505,7 +505,9 @@ def main(argv: list[str]) -> int:
         prev = {}
     now = datetime.now(timezone.utc)
     index = build(models, prev, outdir, now)
-    changed = json.dumps(index["models"], sort_keys=True) != json.dumps(prev.get("models"), sort_keys=True)
+    # 格式版本改了就算數值相同也要推送（圖片重畫過）
+    changed = (prev.get("schema") != SCHEMA
+               or json.dumps(index["models"], sort_keys=True) != json.dumps(prev.get("models"), sort_keys=True))
     if changed:
         index["updated_at"] = iso_utc(now)
         outdir.mkdir(parents=True, exist_ok=True)
