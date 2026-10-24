@@ -27,6 +27,27 @@
   const MODEL_GROUPS = [["決定性模式", ["gfs", "ifs"]], ["系集模式", ["gefs", "eps"]]];
   // 系集成員數（GEFS：控制組＋30 個擾動成員；EPS：控制組＋50），沒追到這個颱風的成員也算在分母
   const ENSEMBLE_SIZE = { gefs: 31, eps: 51 };
+  // 模式路徑依強度上色用的分級（kt，Saffir-Simpson 颶風風力等級）。模式風速是網格平均，
+  // 強颱風常被低估，只看相對變化
+  const TC_SCALE = [
+    [0, "#7fb2e5", "TD", "熱帶性低氣壓 34 kt 以下"],
+    [34, "#3cbf5a", "TS", "熱帶風暴 34–63 kt"],
+    [64, "#f2d230", "1", "一級 64–82 kt"],
+    [83, "#f59a23", "2", "二級 83–95 kt"],
+    [96, "#e5482e", "3", "三級 96–112 kt"],
+    [113, "#d6338f", "4", "四級 113–136 kt"],
+    [137, "#8e3fd1", "5", "五級 137 kt 以上"],
+  ];
+  const scaleColor = (kt) => {
+    let c = TC_SCALE[0][1];
+    for (const [min, col] of TC_SCALE) if (kt != null && kt >= min) c = col;
+    return c;
+  };
+  // 系集機率橢圓：二維常態分布中涵蓋 70% 的範圍是馬氏距離平方 ≤ -2 ln(0.3)
+  const ELLIPSE_K2 = -2 * Math.log(1 - 0.7);
+  const ELLIPSE_TAUS = [24, 48, 72, 96, 120];
+  const ELLIPSE_MIN_MEMBERS = 5;
+  const SLOT_MS = 6 * 3600e3;  // 官方預報每 6 小時取一報（與 fetcher/history.py 相同）
 
   const state = {
     data: null,
@@ -39,6 +60,10 @@
     modelsFailed: false,
     modelOn: new Set(["gfs", "ifs"]),
     density: "off", // 系集路徑密度：off、gefs、eps
+    trackColor: "model", // 模式路徑顏色：model 依模式、intensity 依強度
+    showEllipse: false,
+    showHours: false,
+    prevCount: 0, // 顯示前幾報預報（0 為關閉）
   };
 
   const $ = (id) => document.getElementById(id);
@@ -112,6 +137,7 @@
   let densityLayer = null;
   let densityKey = null;
   let densityInfo = null; // { code, init, members }，給圖例用
+  let intensityLegend = false; // 模式路徑依強度上色時顯示色階
 
   // BD 雲圖是不透明的灰階，另外疊上海岸線
   const coastTiles = L.tileLayer(`${GIBS}/Coastlines_15m/default/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png`, {
@@ -298,6 +324,10 @@
   function renderLegend() {
     const div = layerLegend.getContainer();
     const parts = [];
+    if (intensityLegend) {
+      parts.push(`<div><b>模式路徑強度</b> <span class="muted">近中心最大風速（kt）</span></div>` +
+        `<div class="tc-scale">${TC_SCALE.map(([, c, short, title]) => `<span title="${title}"><i style="background:${c}"></i>${short}</span>`).join("")}</div>`);
+    }
     if (densityInfo) {
       const meta = MODELS[densityInfo.code];
       parts.push(`<div><b>路徑密度</b> <span class="muted">${meta.short}，${fmt(densityInfo.init)} 起報</span></div>` +
@@ -443,41 +473,200 @@
     ].filter(Boolean).join("<br>");
   }
 
+  // 依強度上色：每段用兩端風速的平均決定顏色，同色的線段合成一條多段線
+  function intensitySegments(tracks) {
+    const byColor = new Map();
+    for (const pts of tracks) {
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const kt = a[3] != null && b[3] != null ? (a[3] + b[3]) / 2 : (a[3] ?? b[3]);
+        const c = scaleColor(kt);
+        if (!byColor.has(c)) byColor.set(c, []);
+        byColor.get(c).push([[a[1], a[2]], [b[1], b[2]]]);
+      }
+    }
+    return byColor;
+  }
+
   function drawModelLine(code, init, pts, label, dashed) {
     if (pts.length < 2) return;
+    const byIntensity = state.trackColor === "intensity";
     const c = modelColor(code);
     const ll = pts.map((p) => [p[1], p[2]]);
-    // 底下墊一條背景色的寬線，疊在衛星雲圖或海溫上也看得清楚
-    L.polyline(ll, { color: css("--surface"), weight: 5.5, opacity: 0.75, interactive: false }).addTo(layer);
-    L.polyline(ll, { color: c, weight: 3, opacity: 0.95, interactive: false, lineCap: "round", ...(dashed ? { dashArray: "1 7" } : {}) }).addTo(layer);
+    // 底下墊一條寬線，疊在衛星雲圖或海溫上也看得清楚；依強度上色時用深色底，淺黃色才看得到
+    L.polyline(ll, {
+      color: byIntensity ? "#1d1d1d" : css("--surface"), weight: byIntensity ? 6 : 5.5,
+      opacity: byIntensity ? 0.55 : 0.75, interactive: false,
+    }).addTo(layer);
+    const lineOpts = { weight: 3, opacity: 0.95, interactive: false, lineCap: "round", ...(dashed ? { dashArray: "1 7" } : {}) };
+    if (byIntensity) {
+      for (const [col, segs] of intensitySegments([pts])) L.polyline(segs, { ...lineOpts, color: col }).addTo(layer);
+    } else {
+      L.polyline(ll, { ...lineOpts, color: c }).addTo(layer);
+    }
     for (const p of pts) {
       if (p[0] === 0 || p[0] % 24) continue;
-      L.circleMarker([p[1], p[2]], { radius: 3.5, color: css("--surface"), weight: 1.5, fillColor: c, fillOpacity: 1 })
+      L.circleMarker([p[1], p[2]], {
+        radius: 3.5, color: byIntensity ? "#1d1d1d" : css("--surface"), weight: 1.5,
+        fillColor: byIntensity ? scaleColor(p[3]) : c, fillOpacity: 1,
+      })
         .bindTooltip(modelTip(code, init, p, label), { className: "tc-tip", direction: "top", offset: [0, -4] })
         .addTo(layer);
+      if (state.showHours) {
+        L.tooltip({ permanent: true, direction: "left", offset: [-5, 0], className: "tau-label hour-label" })
+          .setLatLng([p[1], p[2]]).setContent(`${p[0]}h`).addTo(layer);
+      }
     }
     const last = pts[pts.length - 1];
     L.tooltip({ permanent: true, direction: "right", offset: [6, 0], className: "model-label" })
       .setLatLng([last[1], last[2]]).setContent(`<span style="color:${c}">${esc(label)}</span>`).addTo(layer);
   }
 
+  // 成員在某個預報時間的位置；剛好缺這個時間時，用前後 12 小時內的兩點內插
+  function memberPos(m, tau) {
+    for (let i = 0; i < m.length; i++) {
+      if (m[i][0] === tau) return [m[i][1], m[i][2]];
+      if (m[i][0] > tau) {
+        const a = m[i - 1], b = m[i];
+        if (!a || b[0] - a[0] > 12) return null;
+        const f = (tau - a[0]) / (b[0] - a[0]);
+        return [a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])];
+      }
+    }
+    return null;
+  }
+
+  // 成員位置 → 70% 機率橢圓的頂點（在平均位置附近用公里座標算共變異數）
+  function ensembleEllipse(pos) {
+    const n = pos.length;
+    const lat0 = pos.reduce((s, p) => s + p[0], 0) / n;
+    const lon0 = pos.reduce((s, p) => s + p[1], 0) / n;
+    const kx = 111.32 * Math.cos(lat0 * Math.PI / 180), ky = 110.57;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const [lat, lon] of pos) {
+      const x = (lon - lon0) * kx, y = (lat - lat0) * ky;
+      sxx += x * x; syy += y * y; sxy += x * y;
+    }
+    sxx /= n - 1; syy /= n - 1; sxy /= n - 1;
+    // 共變異數矩陣的特徵值與主軸方向
+    const tr = (sxx + syy) / 2, det = Math.sqrt(((sxx - syy) / 2) ** 2 + sxy ** 2);
+    const l1 = tr + det, l2 = Math.max(tr - det, 0);
+    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    // 成員幾乎重疊時至少畫 15 公里，避免變成看不見的點
+    const a = Math.max(Math.sqrt(ELLIPSE_K2 * l1), 15), b = Math.max(Math.sqrt(ELLIPSE_K2 * l2), 15);
+    const pts = [];
+    for (let i = 0; i < 72; i++) {
+      const t = (i / 72) * 2 * Math.PI;
+      const x = a * Math.cos(t) * Math.cos(th) - b * Math.sin(t) * Math.sin(th);
+      const y = a * Math.cos(t) * Math.sin(th) + b * Math.sin(t) * Math.cos(th);
+      pts.push([lat0 + y / ky, lon0 + x / kx]);
+    }
+    return { center: [lat0, lon0], pts, a, b };
+  }
+
+  function drawEllipses(code, init, members) {
+    const c = modelColor(code);
+    const size = ENSEMBLE_SIZE[code];
+    for (const tau of ELLIPSE_TAUS) {
+      const pos = members.map((m) => memberPos(m, tau)).filter(Boolean);
+      if (pos.length < ELLIPSE_MIN_MEMBERS) continue;
+      const e = ensembleEllipse(pos);
+      const valid = fmt(new Date(Date.parse(init) + tau * 3600e3).toISOString());
+      L.polygon(e.pts, { color: c, weight: 1.8, opacity: 0.9, fillColor: c, fillOpacity: 0.08 })
+        .bindTooltip([
+          `<b>${MODELS[code].short} 70% 機率橢圓</b> +${tau} 小時`,
+          `${valid}　中心 ${e.center[0].toFixed(1)}°N ${e.center[1].toFixed(1)}°E`,
+          `長軸半徑約 ${Math.round(e.a)} km，短軸約 ${Math.round(e.b)} km`,
+          `${pos.length} / ${size} 個成員在這個時間仍追得到颱風`,
+          `<span class="muted">${fmt(init)} 起報</span>`,
+        ].join("<br>"), { className: "tc-tip", sticky: true })
+        .addTo(layer);
+      const top = e.pts.reduce((best, p) => (p[0] > best[0] ? p : best));
+      L.tooltip({ permanent: true, direction: "top", offset: [0, -2], className: "model-label" })
+        .setLatLng(top).setContent(`<span style="color:${c}">${tau}h</span>`).addTo(layer);
+    }
+  }
+
   function drawModels(storm) {
+    intensityLegend = false;
     for (const code of ["gefs", "eps", "gfs", "ifs"]) {  // 系集先畫，決定性模式疊在上面
       if (!state.modelOn.has(code)) continue;
       const ms = matchModelStorm(code, storm);
       if (!ms) continue;
+      if (state.trackColor === "intensity") intensityLegend = true;
       const init = state.models.models[code].init;
       const meta = MODELS[code];
       if (meta.kind === "deterministic") {
         drawModelLine(code, init, ms.track || [], meta.short, false);
         continue;
       }
-      const c = modelColor(code);
-      for (const m of ms.members || []) {
-        if (m.length < 2) continue;
-        L.polyline(m.map((p) => [p[1], p[2]]), { color: c, weight: 1, opacity: 0.4, interactive: false }).addTo(layer);
+      const members = (ms.members || []).filter((m) => m.length >= 2);
+      // 開了機率橢圓時成員路徑畫淡一點，橢圓才看得清楚
+      const memberOpacity = state.showEllipse ? 0.2 : 0.4;
+      if (state.trackColor === "intensity") {
+        for (const [col, segs] of intensitySegments(members)) {
+          L.polyline(segs, { color: col, weight: 1.2, opacity: memberOpacity + 0.15, interactive: false }).addTo(layer);
+        }
+      } else {
+        const c = modelColor(code);
+        for (const m of members) {
+          L.polyline(m.map((p) => [p[1], p[2]]), { color: c, weight: 1, opacity: memberOpacity, interactive: false }).addTo(layer);
+        }
       }
+      if (state.showEllipse) drawEllipses(code, init, members);
       if (ms.mean?.length) drawModelLine(code, init, ms.mean, `${meta.short} 平均`, true);
+    }
+  }
+
+  /* ---------- 前幾報預報 ---------- */
+
+  const slotOf = (iso) => Math.floor(Date.parse(iso) / SLOT_MS);
+  // 官方前幾報：每 6 小時時段只留一報，且不含與目前這報同一時段的
+  function previousReports(a) {
+    const cur = slotOf(a.issued);
+    return (a.previous || []).filter((h) => h.points?.length && slotOf(h.issued) < cur).slice(0, state.prevCount);
+  }
+  // 越舊的越淡
+  const prevOpacity = (i, n) => 0.75 - 0.45 * (n > 1 ? i / (n - 1) : 0);
+
+  function drawPrevious(storm) {
+    if (!state.prevCount) return;
+    for (const agency of AGENCY_ORDER) {
+      const a = storm.agencies[agency];
+      if (!a || !state.enabled.has(agency)) continue;
+      const c = color(agency);
+      const reports = previousReports(a);
+      reports.forEach((h, i) => {
+        const op = prevOpacity(i, reports.length);
+        const title = `<b>${esc(AGENCIES[agency].name)} 前 ${i + 1} 報</b>　${fmt(h.issued)} 發布`;
+        L.polyline(h.points.map((p) => [p.lat, p.lon]), { color: c, weight: 2, opacity: op, dashArray: "2 5" })
+          .bindTooltip(title, { className: "tc-tip", sticky: true }).addTo(layer);
+        for (const p of h.points) {
+          if (!p.tau) continue;
+          L.circleMarker([p.lat, p.lon], { radius: 2.5, color: c, weight: 1, opacity: op, fillColor: c, fillOpacity: op })
+            .bindTooltip(`${title}<br>` + pointTip(agency, a, p).split("<br>").slice(1).join("<br>"),
+              { className: "tc-tip", direction: "top", offset: [0, -4] })
+            .addTo(layer);
+        }
+      });
+    }
+    if (!state.models) return;
+    for (const code of ["gfs", "ifs", "gefs", "eps"]) {
+      const m = state.models.models?.[code];
+      if (!state.modelOn.has(code) || !m) continue;
+      const runs = (m.previous || []).slice(0, state.prevCount);
+      const meta = MODELS[code];
+      const label = meta.kind === "ensemble" ? `${meta.short} 平均` : meta.short;
+      runs.forEach((run, i) => {
+        const ms = TcCommon.matchModelStorm(run, storm);
+        const pts = ms?.track || ms?.mean;
+        if (!pts || pts.length < 2) return;
+        L.polyline(pts.map((p) => [p[1], p[2]]), {
+          color: modelColor(code), weight: 2, opacity: prevOpacity(i, runs.length), dashArray: "2 5",
+        })
+          .bindTooltip(`<b>${esc(label)} 前 ${i + 1} 次起報</b>　${fmt(run.init)} 起報`, { className: "tc-tip", sticky: true })
+          .addTo(layer);
+      });
     }
   }
 
@@ -611,6 +800,28 @@
       pointBorderWidth: 1.5,
       tension: 0,
     }));
+    if (state.prevCount) {
+      for (const k of AGENCY_ORDER) {
+        const a = storm.agencies[k];
+        if (!a || !state.enabled.has(k)) continue;
+        const reports = previousReports(a);
+        reports.forEach((h, i) => {
+          const alpha = Math.round(prevOpacity(i, reports.length) * 255).toString(16).padStart(2, "0");
+          datasets.push({
+            label: `${AGENCIES[k].name} 前 ${i + 1} 報（${fmt(h.issued)}）`,
+            prev: true,
+            data: h.points.map((p) => ({ x: Date.parse(p.time), y: wind(p.vmax_kt, p.vmax_ms), p })).filter((d) => d.y != null),
+            borderColor: color(k) + alpha,
+            backgroundColor: color(k) + alpha,
+            borderWidth: 1.5,
+            borderDash: [3, 4],
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0,
+          });
+        });
+      }
+    }
     const grid = css("--grid"), muted = css("--muted"), text2 = css("--text-2");
     const opts = {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -626,7 +837,7 @@
         },
       },
       plugins: {
-        legend: { labels: { color: text2, usePointStyle: true, boxHeight: 8 } },
+        legend: { labels: { color: text2, usePointStyle: true, boxHeight: 8, filter: (item, data) => !data.datasets[item.datasetIndex].prev } },
         tooltip: {
           callbacks: {
             title: (items) => fmt(new Date(items[0].parsed.x).toISOString()),
@@ -677,9 +888,11 @@
     }
     const sel = storms.find((s) => s.key === state.selected);
     if (sel) {
+      drawPrevious(sel);  // 前幾報在最下面
       drawModels(sel);  // 先畫模式，官方路徑疊在上面
       selBounds = drawStorm(sel, true);
     }
+    if (!sel) intensityLegend = false;
     drawDensity(state.models ? sel : null);
 
     $("detail").hidden = !sel;
@@ -740,6 +953,33 @@
   }));
   $("show-past").addEventListener("change", (e) => { state.showPast = e.target.checked; render(); });
   $("show-cone").addEventListener("change", (e) => { state.showCone = e.target.checked; render(); });
+
+  // 選項按鈕組：記在瀏覽器，重新整理後保留
+  function segmented(id, attr, key, parse = (v) => v) {
+    const buttons = [...$(id).querySelectorAll(`[data-${attr}]`)];
+    const apply = (v) => {
+      state[key] = parse(v);
+      buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(v))));
+    };
+    const saved = store.get(`tc-${attr}`);
+    if (buttons.some((b) => b.dataset[attr] === saved)) apply(saved);
+    buttons.forEach((b) => b.addEventListener("click", () => {
+      apply(b.dataset[attr]);
+      store.set(`tc-${attr}`, b.dataset[attr]);
+      render();
+    }));
+  }
+  segmented("prev-count", "prev", "prevCount", Number);
+  segmented("track-color", "color", "trackColor");
+  for (const [id, key, storeKey] of [["show-ellipse", "showEllipse", "tc-ellipse"], ["show-hours", "showHours", "tc-hours"]]) {
+    state[key] = store.get(storeKey) === "on";
+    $(id).checked = state[key];
+    $(id).addEventListener("change", (e) => {
+      state[key] = e.target.checked;
+      store.set(storeKey, state[key] ? "on" : "off");
+      render();
+    });
+  }
 
   const savedModels = store.get("tc-models");
   if (savedModels) state.modelOn = new Set(savedModels.split(",").filter((k) => MODELS[k]));

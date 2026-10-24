@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import cwa, gibs, jma, jtwc
+from . import cwa, gibs, history, jma, jtwc
 from .common import FetchError, iso_utc, parse_iso
 from .merge import group_storms
 
@@ -73,11 +73,13 @@ def build(prev: dict, now: datetime) -> dict:
             sources[code] = {"name": name, "status": "error",
                              "message": f"{type(e).__name__}: {e}", "count": len(reused)}
         print(f"[{code}] {sources[code]['status']} {sources[code].get('message', '')}".rstrip())
+    storms = group_storms(collected)
+    history.attach_agency_history(storms, prev, now)
     return {
         "schema": 1,
         "checked_at": iso_utc(now),
         "sources": sources,
-        "storms": group_storms(collected),
+        "storms": storms,
         "layers": {"sst": build_sst(prev, now)},
     }
 
