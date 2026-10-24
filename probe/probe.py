@@ -1,95 +1,71 @@
-"""暫時用的資料來源探測（不合併）。"""
-import re, sys, urllib.request, json
+"""暫時用的資料來源探測（不合併）：下載樣本檔存到 probe/out。"""
+import re, urllib.request, os
 from datetime import datetime, timedelta, timezone
-
 UA = "typhoon-tracker/1.0"
-def get(url, n=None):
+os.makedirs("probe/out", exist_ok=True)
+def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    if n: req.add_header("Range", f"bytes=0-{n}")
     try:
-        with urllib.request.urlopen(req, timeout=40) as r:
+        with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, b""
     except Exception as e:
         return str(e), b""
-
-def links(url):
-    st, b = get(url)
-    t = b.decode("utf-8", "replace")
-    names = re.findall(r'href="([^"?/][^"]*)"', t)
-    return st, names
-
 now = datetime.now(timezone.utc)
-day = now.strftime("%Y%m%d"); yday = (now - timedelta(days=1)).strftime("%Y%m%d")
-
-def section(t): print(f"\n===== {t}", flush=True)
-
-section("NOMADS ens_tracker/prod")
-st, n = links("https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/")
-print(st, sorted(set(x.split(".")[0] for x in n)), n[-12:])
-for model in ("aigfs", "aigefs", "hgefs", "gfs", "gefs", "cmce", "fens", "naefs", "ecme", "cens"):
-    for d in (day, yday):
-        st, n = links(f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/{model}.{d}/")
-        if st == 200:
-            print(model, d, "cycles", n)
-            cyc = sorted(x.strip("/") for x in n if re.fullmatch(r"\d\d/?", x))
-            if cyc:
-                st2, n2 = links(f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod/{model}.{d}/{cyc[-1]}/tctrack/")
-                print("  ", cyc[-1], st2, len(n2), [x for x in n2 if "atcfunix" in x][:80])
-            break
-    else:
-        print(model, "none")
-
-section("NOMADS hafs/prod")
-for base in ("https://nomads.ncep.noaa.gov/pub/data/nccf/com/hafs/prod/",):
-    st, n = links(base)
-    print(st, n[-15:])
-    for x in n[-6:]:
-        st2, n2 = links(base + x)
-        print(" ", x, st2, n2[:20])
-        for y in n2[-2:]:
-            st3, n3 = links(base + x + y)
-            print("    ", y, st3, [z for z in n3 if "atcf" in z or "trak" in z][:20], n3[:10])
-
-section("ECMWF open data AIFS")
-for d in (day, yday):
+print("== ECMWF S3 listing")
+for d in ((now).strftime("%Y%m%d"), (now - timedelta(days=1)).strftime("%Y%m%d")):
     for hh in ("00", "06", "12", "18"):
-        for path in ("aifs-single/0p25/oper/", "aifs-ens/0p25/enfo/", "ifs/0p25/oper/", "ifs/0p25/enfo/"):
-            st, n = links(f"https://data.ecmwf.int/forecasts/{d}/{hh}z/{path}")
-            tf = [x for x in n if "tf" in x.split("-")[-1] or x.endswith(".bufr")]
-            print(d, hh, path, st, len(n), tf[:5])
-    break
-
-section("UCAR adecks_open")
-st, n = links("https://hurricanes.ral.ucar.edu/repository/data/adecks_open/2026/")
-wp = sorted(x for x in n if x.lower().startswith("awp"))
-print(st, wp[-10:])
-for f in wp[-3:]:
-    st, b = get("https://hurricanes.ral.ucar.edu/repository/data/adecks_open/2026/" + f)
-    lines = b.decode("utf-8", "replace").splitlines()
-    techs = {}
-    for ln in lines:
-        p = [x.strip() for x in ln.split(",")]
-        if len(p) > 5: techs.setdefault(p[4], set()).add(p[2])
-    latest = max((max(v) for v in techs.values()), default="")
-    print(f, st, len(lines), "latest", latest)
-    print("  techs at latest/prev cycles:", sorted(k for k, v in techs.items() if max(v) >= latest[:8]))
-
-section("Google Weather Lab")
-for model in ("WNV3", "OPER", "FNV3P2", "FNV3", "GENC", "GENCAST"):
-    t = now.replace(minute=0, second=0, microsecond=0)
-    t -= timedelta(hours=t.hour % 6)
-    for i in range(8):
-        stamp = t.strftime("%Y_%m_%dT%H_00")
-        url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{model}/ensemble_mean/paired/csv/{model}_{stamp}_paired.csv"
+        for path in ("aifs-single/0p25/oper/", "aifs-ens/0p25/enfo/", "ifs/0p25/oper/"):
+            st, b = get(f"https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/?list-type=2&prefix={d}/{hh}z/{path}")
+            keys = re.findall(r"<Key>([^<]+)</Key>", b.decode())
+            print(d, hh, path, st, len(keys), [k for k in keys if "bufr" in k or "tf" in k.rsplit("-", 1)[-1]])
+NOM = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/ens_tracker/prod"
+d = now.strftime("%Y%m%d")
+def latest(model, member):
+    t = now.replace(minute=0, second=0, microsecond=0); t -= timedelta(hours=t.hour % 6)
+    for _ in range(8):
+        url = f"{NOM}/{model}.{t:%Y%m%d}/{t:%H}/tctrack/{member}.t{t:%H}z.cyclone.trackatcfunix"
         st, b = get(url)
-        if st == 200:
-            txt = b.decode("utf-8", "replace")
-            print(model, stamp, len(b)); print("\n".join(txt.splitlines()[:14]))
-            ids = sorted(set(l.split(",")[0] for l in txt.splitlines() if l and not l.startswith("#")))
-            print("track ids", ids[:30])
-            break
+        if st == 200 and b:
+            return t, b
         t -= timedelta(hours=6)
-    else:
-        print(model, "not found", st)
+    return None, b""
+for model, members in (("aigfs", ["agfs", "agfsp"]), ("aigefs", ["aimn", "a000", "a001", "a000p"]), ("hgefs", ["ahmn"]),
+                       ("cmce", ["cmc", "cemn", "cc00", "cp01"]), ("fens", ["ngx", "nemn", "nc00", "np01"]), ("gfs", ["avnop", "avnx"])):
+    for m in members:
+        t, b = latest(model, m)
+        wp = [l for l in b.decode().splitlines() if l.startswith("WP")]
+        print(model, m, t, len(b), len(wp), wp[:2])
+        open(f"probe/out/{model}_{m}.atcfunix", "wb").write(b)
+print("== HAFS")
+t = now.replace(minute=0, second=0, microsecond=0); t -= timedelta(hours=t.hour % 6)
+for _ in range(6):
+    st, b = get(f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/hafs/prod/hfsa.{t:%Y%m%d}/{t:%H}/")
+    files = sorted(set(re.findall(r'href="([^"]+trak\.atcfunix)"', b.decode())))
+    if files:
+        print(t, files)
+        for f in files:
+            if "w." in f:
+                st, b2 = get(f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/hafs/prod/hfsa.{t:%Y%m%d}/{t:%H}/{f}")
+                print(f, st, len(b2), b2.decode().splitlines()[:2])
+                open(f"probe/out/hfsa_{f}", "wb").write(b2)
+        break
+    t -= timedelta(hours=6)
+print("== Weather Lab ensembles")
+WL = "https://deepmind.google.com/science/weatherlab/download/cyclones"
+t = now.replace(minute=0, second=0, microsecond=0); t -= timedelta(hours=t.hour % 6)
+for model in ("WNV3", "OPER", "FNV3P2", "FNV3", "GENC", "FNV3_LARGE_ENSEMBLE"):
+    for prod in ("ensemble_mean", "ensemble"):
+        tt = t
+        for _ in range(6):
+            st, b = get(f"{WL}/{model}/{prod}/paired/csv/{model}_{tt:%Y_%m_%dT%H_00}_paired.csv")
+            if st == 200: break
+            tt -= timedelta(hours=6)
+        lines = b.decode().splitlines()
+        ids = sorted(set(l.split(",")[1] for l in lines if l[:1].isdigit()))
+        samples = sorted(set(int(l.split(",")[2]) for l in lines if l[:1].isdigit()))
+        print(model, prod, tt, st, len(b), ids, samples[:3], samples[-3:])
+        if prod == "ensemble_mean" or model in ("WNV3", "GENC"):
+            keep = [l for l in lines if not l[:1].isdigit() or ",WP" in l]
+            open(f"probe/out/wl_{model}_{prod}.csv", "w").write("\n".join(keep) + "\n")

@@ -2,10 +2,15 @@ name: probe
 on:
   push:
     branches: [claude/project-thread-wx1bnc]
-    paths: [probe/**, .github/workflows/probe.yml]
+    paths: [probe/probe.py, .github/workflows/probe.yml]
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: python3 probe/probe.py
+      - run: |
+          git add probe/out
+          git -c user.name=probe -c user.email=probe@users.noreply.github.com commit -qm "probe samples" && git push -q
