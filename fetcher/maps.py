@@ -35,7 +35,7 @@ from .common import FetchError, MS_PER_KT, USER_AGENT, TIMEOUT, http_get, iso_ut
 
 TAUS = range(0, 121, 6)
 LEVELS = (850, 700, 600, 500, 400, 300, 250, 200)  # GFS 與 IFS 開放資料都有的層
-SCHEMA = 2
+SCHEMA = 3  # 圖的版面改過也要加 1，下次執行時全部重畫
 HALF_LAT, HALF_LON = 10.0, 13.0  # 圖的範圍：中心上下 10 度、左右 13 度
 MARGIN = 1.0  # 計算渦度需要的外圍
 SMOOTH = 2.0  # 風切場的高斯平滑，格點數（0.25 度網格）
@@ -46,8 +46,8 @@ NOMADS_FILTER = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
 COAST = Path(__file__).with_name("coast_wpac.json")
 
 MODELS = {
-    "gfs": {"name": "NCEP GFS", "short": "GFS", "credit": "Data: NOAA NCEP GFS 0.25°"},
-    "ifs": {"name": "ECMWF IFS", "short": "IFS", "credit": "Data: ECMWF open data (CC BY 4.0)"},
+    "gfs": {"name": "NCEP GFS", "short": "GFS", "credit": "NOAA NCEP GFS 0.25°"},
+    "ifs": {"name": "ECMWF IFS", "short": "IFS", "credit": "ECMWF open data (CC BY 4.0)"},
 }
 MAX_TRIES = 3  # 同一次起報最多重試幾輪（每小時一輪），之後缺的時段就不補了
 
@@ -66,11 +66,11 @@ STEER_LEVELS = [2.5 * (i + 1) for i in range(22)]
 PRODUCTS = {
     "shear": {"title": "200-850 hPa Wind Shear (Vortex Removed) [kt]", "levels": SHEAR_LEVELS,
               "ticks": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]},
-    "dlm400": {"title": "400-850 hPa Deep-Layer Mean Steering (Vortex Removed) [kt]", "top": 400,
+    "dlm400": {"title": "400-850 hPa Deep-Layer Steering (Vortex Removed) [kt]", "top": 400,
                "levels": STEER_LEVELS, "ticks": list(range(5, 56, 5))},
-    "dlm300": {"title": "300-850 hPa Deep-Layer Mean Steering (Vortex Removed) [kt]", "top": 300,
+    "dlm300": {"title": "300-850 hPa Deep-Layer Steering (Vortex Removed) [kt]", "top": 300,
                "levels": STEER_LEVELS, "ticks": list(range(5, 56, 5))},
-    "dlm200": {"title": "200-850 hPa Deep-Layer Mean Steering (Vortex Removed) [kt]", "top": 200,
+    "dlm200": {"title": "200-850 hPa Deep-Layer Steering (Vortex Removed) [kt]", "top": 200,
                "levels": STEER_LEVELS, "ticks": list(range(5, 56, 5))},
 }
 
@@ -335,9 +335,9 @@ def render(fr: dict, meta: dict, product: str = "shear") -> bytes:
     left, right = pos.x0, pos.x1
     fig.text(left, 0.965, f"{meta['model']} {cfg['title']}",
              fontsize=12.5, fontweight="bold", va="top")
-    fig.text(left, 0.93, f"Init: {meta['init']:%HZ %d %b %Y}   Forecast Hour: [{meta['tau']}]", fontsize=10, va="top")
+    fig.text(left, 0.93, f"{meta['storm']}   Init: {meta['init']:%HZ %d %b %Y}   Forecast Hour: [{meta['tau']}]",
+             fontsize=10, va="top")
     fig.text(right, 0.93, f"Valid: {meta['valid']:%HZ %a %d %b %Y}", fontsize=10, va="top", ha="right")
-    fig.text(right, 0.965, meta["storm"], fontsize=12, fontweight="bold", va="top", ha="right")
 
     cax = fig.add_axes([left, 0.085, right - left, 0.022])
     cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation="horizontal",
@@ -346,10 +346,10 @@ def render(fr: dict, meta: dict, product: str = "shear") -> bytes:
     d = mean_dir
     if product == "shear":
         summary = f"0-500 km mean shear: {mean_kt:.0f} kt from {d:03.0f}° ({COMPASS[round(d / 45) % 8]})"
-        note = "Dashed circle: 500 km (vortex removal and averaging radius)"
+        note = "Dashed circle: 500 km (vortex removal and averaging)"
     else:
         summary = f"0-500 km mean steering: {mean_kt:.0f} kt toward {d:03.0f}° ({COMPASS[round(d / 45) % 8]})"
-        note = "Dashed circle: 500 km. Arrow: 24-h displacement at the mean steering"
+        note = "Dashed circle: 500 km   Arrow: 24-h motion at mean steering"
     fig.text(left, 0.035, summary, fontsize=9.5, fontweight="bold")
     fig.text(left, 0.01, note, fontsize=8.5, color="#555555")
     fig.text(right, 0.01, meta["credit"], fontsize=8.5, ha="right", color="#555555")
