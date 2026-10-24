@@ -58,6 +58,7 @@
     showCone: false,
     models: null,
     modelsFailed: false,
+    agencyTouched: false, // 使用者點過機構按鈕後，不再自動替換沒有資料的機構
     modelOn: new Set(), // 預設不顯示模式路徑
     density: "off", // 系集路徑密度：off、gefs、eps
     trackColor: "model", // 模式路徑顏色：model 依模式、intensity 依強度
@@ -164,6 +165,7 @@
 
   map.on("overlayadd overlayremove", (e) => {
     const on = e.type === "overlayadd";
+    if (e.layer === cloudGroup || e.layer === bdGroup) stopLoop();
     // 兩種雲圖擇一顯示：BD 雲圖不透明，同時開會把另一張蓋住。
     // 等圖層控制項處理完這次點擊再關另一張，否則控制項會依舊的勾選狀態把它加回來
     if (e.layer === cloudGroup && on) {
@@ -257,7 +259,8 @@
 
   let cloudBusy = false;
   async function refreshClouds() {
-    if (!map.hasLayer(cloudGroup) || cloudBusy) return;
+    // 播放動畫時不換底圖，停止後下一次更新再換
+    if (!map.hasLayer(cloudGroup) || cloudBusy || loop.timer) return;
     cloudBusy = true;
     const t = await latestCloudTime();
     cloudBusy = false;
@@ -295,7 +298,7 @@
 
   let bdBusy = false;
   async function refreshBd() {
-    if (!map.hasLayer(bdGroup) || bdBusy) return;
+    if (!map.hasLayer(bdGroup) || bdBusy || loop.timer) return;
     bdBusy = true;
     const t = await latestBdTime();
     bdBusy = false;
@@ -348,6 +351,7 @@
           `<div class="muted">黃色以上（26 °C 以上）有利颱風發展或維持強度</div>`);
       }
     }
+    renderLoopBar();
     div.hidden = !parts.length;
     div.innerHTML = parts.join('<hr>');
   }
@@ -439,7 +443,7 @@
       });
     }
     // 目前位置用主要機構（中央氣象署優先）
-    const main = firstEnabled(storm);
+    const main = mainAgency(storm);
     if (main) {
       const a = storm.agencies[main];
       const p0 = a.points[0];
@@ -683,16 +687,262 @@
     renderLegend();
   }
 
-  // 這個颱風要畫的機構：勾選的機構裡有資料的；一個都沒有時（例如氣象署沒發布）改用第一個有資料的機構
+  // 這個颱風要畫的機構：勾選的機構裡有資料的。還沒點過機構按鈕時，颱風若沒有預設機構（中央氣象署）的資料，
+  // 改用第一個有資料的機構；點過之後完全照使用者的選擇，全部取消就不畫
   function shownAgencies(storm) {
     const has = AGENCY_ORDER.filter((k) => storm.agencies[k]?.points?.length);
     const on = has.filter((k) => state.enabled.has(k));
-    return on.length ? on : has.slice(0, 1);
+    return on.length || state.agencyTouched ? on : has.slice(0, 1);
   }
   const isShown = (storm, k) => shownAgencies(storm).includes(k);
   function firstEnabled(storm) {
     return shownAgencies(storm)[0];
   }
+  // 目前位置、時間軸起點用的機構：沒有顯示任何機構時仍用第一個有資料的，颱風才不會從地圖上消失
+  const mainAgency = (storm) => firstEnabled(storm) || AGENCY_ORDER.find((k) => storm.agencies[k]?.points?.length);
+
+  /* ---------- 雲圖動畫 ---------- */
+
+  // 動畫長度（小時）→ 每幾分鐘一張；張數控制在 19 張左右，圖磚數量才不會太多
+  const LOOP_STEP_MIN = { 3: 10, 6: 20 };
+  const LOOP_FRAME_MS = 250;
+  const LOOP_DWELL_MS = 1200; // 最後一張多停一下
+  const loop = { frames: [], idx: 0, timer: null, group: null, base: null, span: 3, ready: false };
+
+  function loopKind() {
+    if (map.hasLayer(bdGroup) && bdTime) return "bd";
+    if (map.hasLayer(cloudGroup) && cloudTime) return "ir";
+    return null;
+  }
+
+  // 向日葵每天 02:40、14:40 UTC 沒有全圓盤觀測
+  const himawariGap = (ms) => { const d = new Date(ms); return d.getUTCMinutes() === 40 && d.getUTCHours() % 12 === 2; };
+
+  function loopTimes(latestMs, kind) {
+    const step = LOOP_STEP_MIN[loop.span] * 60e3;
+    const n = Math.round(loop.span * 3600e3 / step);
+    const out = [];
+    for (let i = n; i >= 0; i--) {
+      const t = latestMs - i * step;
+      if (kind === "ir" && himawariGap(t)) continue;
+      out.push(t);
+    }
+    return out;
+  }
+
+  function startLoop() {
+    const kind = loopKind();
+    if (!kind) return;
+    stopLoop();
+    const latest = kind === "bd" ? Date.parse(bdTime) : Date.parse(stampToIso(cloudTime));
+    loop.group = kind === "bd" ? bdGroup : cloudGroup;
+    loop.base = kind === "bd" ? bdTiles : cloudTiles;
+    const times = loopTimes(latest, kind);
+    let loaded = 0;
+    loop.frames = times.map((t) => {
+      const lyr = kind === "bd"
+        ? TcRaster.bdLayer(bdUrl(new Date(t).toISOString().replace(".000Z", "Z")),
+          { pane: "bd", maxNativeZoom: 6, bounds: [[-80, 60], [80, 222]], opacity: 0 })
+        : L.tileLayer(cloudUrl(himawariStamp(t)), { pane: "clouds", maxNativeZoom: 5, bounds: [[-80, 60], [80, 222]], opacity: 0 });
+      lyr.once("load", () => {
+        loaded += 1;
+        if (!loop.ready) $("loop-label").textContent = `載入中 ${loaded}/${times.length}…`;
+        if (loaded === times.length) loop.ready = true;
+      });
+      loop.group.addLayer(lyr);
+      return { t, lyr };
+    });
+    loop.idx = 0;
+    loop.ready = false;
+    $("loop-label").textContent = `載入中 0/${times.length}…`;
+    $("loop-play").textContent = "⏸ 停止";
+    // 最多等 15 秒，沒載完的時段照樣播（缺的圖磚會是空白）
+    const started = Date.now();
+    const tick = () => {
+      if (!loop.ready && Date.now() - started < 15000) { loop.timer = setTimeout(tick, 300); return; }
+      loop.ready = true;
+      loop.base?.setOpacity(0);
+      showFrame(loop.idx);
+      const last = loop.idx === loop.frames.length - 1;
+      loop.idx = (loop.idx + 1) % loop.frames.length;
+      loop.timer = setTimeout(tick, last ? LOOP_DWELL_MS : LOOP_FRAME_MS);
+    };
+    tick();
+  }
+
+  function showFrame(i) {
+    loop.frames.forEach((f, k) => f.lyr.setOpacity(k === i ? 1 : 0));
+    const f = loop.frames[i];
+    $("loop-label").textContent = `${fmt(new Date(f.t).toISOString())}（${i + 1}/${loop.frames.length}）`;
+  }
+
+  function stopLoop() {
+    clearTimeout(loop.timer);
+    loop.timer = null;
+    for (const f of loop.frames) loop.group?.removeLayer(f.lyr);
+    loop.frames = [];
+    loop.base?.setOpacity(1);
+    loop.base = null;
+    $("loop-play").textContent = "▶ 播放";
+    renderLoopBar();
+  }
+
+  function renderLoopBar() {
+    if (loop.timer) return;
+    const kind = loopKind();
+    $("loop-play").disabled = !kind;
+    $("loop-play").title = kind ? "" : "請先開啟衛星雲圖或 BD 強化雲圖";
+    $("loop-label").textContent = kind ? `播放過去 ${loop.span} 小時的${kind === "bd" ? " BD 強化" : "紅外線"}雲圖` : "未開啟雲圖";
+  }
+
+  function stormNow() {
+    const sel = state.data?.storms?.find((s) => s.key === state.selected);
+    const k = sel && mainAgency(sel);
+    return k ? sel.agencies[k].points[0] : null;
+  }
+  function centerOnStorm() {
+    const p0 = stormNow();
+    if (p0) map.setView([p0.lat, p0.lon], Math.max(map.getZoom(), 5.5));
+  }
+
+  $("loop-play").addEventListener("click", () => {
+    if (loop.timer) { stopLoop(); return; }
+    // 動畫以颱風為中心：地圖還在大範圍時先移過去，載入的圖磚也比較少
+    const p0 = stormNow();
+    if (p0 && (map.getZoom() < 5 || !map.getBounds().pad(-0.25).contains([p0.lat, p0.lon]))) centerOnStorm();
+    startLoop();
+  });
+  $("center-storm").addEventListener("click", centerOnStorm);
+  $("loop-span").querySelectorAll("[data-span]").forEach((b) => b.addEventListener("click", () => {
+    loop.span = Number(b.dataset.span);
+    $("loop-span").querySelectorAll("[data-span]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    if (loop.timer) startLoop(); else renderLoopBar();
+  }));
+
+  /* ---------- 預報時間軸 ---------- */
+
+  // 拖到某個時間時，標出各機構與各模式預報在這個時間的位置（系集成員以小點表示），比較分歧
+  const FC_MAX_HOURS = 168;
+  const FC_STEP = 3;
+  const timeLayer = L.layerGroup().addTo(map);
+  const fc = { hours: 0, base: null, timer: null };
+
+  const lerp = (a, b, f) => (a == null || b == null ? (f < 0.5 ? a : b) : a + f * (b - a));
+  function agencyAt(points, t) {
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const ta = Date.parse(a.time), tb = Date.parse(b.time);
+      if (t < ta || t > tb) continue;
+      const f = tb > ta ? (t - ta) / (tb - ta) : 0;
+      return {
+        lat: lerp(a.lat, b.lat, f), lon: lerp(a.lon, b.lon, f),
+        vmax_kt: lerp(a.vmax_kt, b.vmax_kt, f), vmax_ms: lerp(a.vmax_ms, b.vmax_ms, f), pres_hpa: lerp(a.pres_hpa, b.pres_hpa, f),
+      };
+    }
+    return null;
+  }
+  // 模式路徑 [tau, lat, lon, 風速, 氣壓] 在 tau 小時的位置，前後兩點相隔超過 12 小時不內插
+  function modelAt(pts, tau) {
+    for (let i = 0; i < pts.length; i++) {
+      if (pts[i][0] === tau) return pts[i];
+      if (pts[i][0] > tau) {
+        const a = pts[i - 1], b = pts[i];
+        if (!a || b[0] - a[0] > 12) return null;
+        const f = (tau - a[0]) / (b[0] - a[0]);
+        return [tau, lerp(a[1], b[1], f), lerp(a[2], b[2], f), lerp(a[3], b[3], f), lerp(a[4], b[4], f)];
+      }
+    }
+    return null;
+  }
+
+  // 時間軸的起點是主要機構目前位置的時間，終點是顯示中的官方預報與模式路徑最晚的時間
+  function updateTimeRange(storm) {
+    const k = storm && mainAgency(storm);
+    if (!k) { fc.base = null; return; }
+    fc.base = Date.parse(storm.agencies[k].points[0].time);
+    let end = fc.base;
+    for (const a of shownAgencies(storm)) end = Math.max(end, Date.parse(storm.agencies[a].points.at(-1).time));
+    for (const code of state.modelOn) {
+      const ms = state.models && matchModelStorm(code, storm);
+      const pts = ms?.track || ms?.mean;
+      if (pts?.length) end = Math.max(end, Date.parse(state.models.models[code].init) + pts.at(-1)[0] * 3600e3);
+    }
+    const max = Math.min(FC_MAX_HOURS, Math.floor((end - fc.base) / 3600e3 / FC_STEP) * FC_STEP);
+    $("fc-time").max = String(Math.max(max, FC_STEP));
+    if (fc.hours > max) fc.hours = max;
+    $("fc-time").value = String(fc.hours);
+  }
+
+  function drawTime() {
+    timeLayer.clearLayers();
+    const storm = state.data?.storms?.find((s) => s.key === state.selected);
+    if (!storm || fc.base == null) { $("fc-label").textContent = "—"; return; }
+    if (!fc.hours) { $("fc-label").textContent = "拖曳查看同一時間各預報的位置"; return; }
+    const t = fc.base + fc.hours * 3600e3;
+    $("fc-label").textContent = `+${fc.hours} 小時　${fmt(new Date(t).toISOString())}`;
+    const tag = (ll, html) => L.tooltip({ permanent: true, direction: "right", offset: [9, 0], className: "model-label time-tag" })
+      .setLatLng(ll).setContent(html).addTo(timeLayer);
+
+    for (const code of ["gefs", "eps", "gfs", "ifs"]) {
+      if (!state.modelOn.has(code)) continue;
+      const ms = matchModelStorm(code, storm);
+      if (!ms) continue;
+      const init = state.models.models[code].init;
+      const tau = (t - Date.parse(init)) / 3600e3;
+      const c = modelColor(code);
+      const meta = MODELS[code];
+      for (const m of ms.members || []) {
+        const p = modelAt(m, tau);
+        if (p) L.circleMarker([p[1], p[2]], { radius: 3, stroke: false, fillColor: c, fillOpacity: 0.75, interactive: false }).addTo(timeLayer);
+      }
+      const p = modelAt(ms.track || ms.mean || [], tau);
+      if (!p) continue;
+      const label = meta.kind === "ensemble" ? `${meta.short} 平均` : meta.short;
+      L.circleMarker([p[1], p[2]], { radius: 6, color: css("--surface"), weight: 2, fillColor: c, fillOpacity: 1 })
+        .bindTooltip(modelTip(code, init, p.map((v, i) => (!i || v == null ? v : i <= 2 ? Math.round(v * 10) / 10 : Math.round(v))), label),
+          { className: "tc-tip", direction: "top", offset: [0, -6] })
+        .addTo(timeLayer);
+      tag([p[1], p[2]], `<span style="color:${c}">${esc(label)}</span>`);
+    }
+    for (const agency of shownAgencies(storm)) {
+      const a = storm.agencies[agency];
+      const p = agencyAt(a.points, t);
+      if (!p) continue;
+      const w = wind(p.vmax_kt, p.vmax_ms);
+      L.marker([p.lat, p.lon], { icon: shapeIcon(agency, 18), zIndexOffset: 2000, keyboard: false })
+        .bindTooltip([
+          `<b>${esc(AGENCIES[agency].name)}</b> +${fc.hours} 小時（內插）`,
+          `${p.lat.toFixed(1)}°N ${p.lon.toFixed(1)}°E`,
+          w != null ? `最大風速 ${w} ${unitText()}` : "",
+          p.pres_hpa != null ? `中心氣壓 ${Math.round(p.pres_hpa)} hPa` : "",
+        ].filter(Boolean).join("<br>"), { className: "tc-tip", direction: "top", offset: [0, -8] })
+        .addTo(timeLayer);
+      tag([p.lat, p.lon], `<span style="color:${color(agency)}">${AGENCIES[agency].short}</span>`);
+    }
+  }
+
+  function stopFc() {
+    clearInterval(fc.timer);
+    fc.timer = null;
+    $("fc-play").textContent = "▶ 播放";
+  }
+  $("fc-time").addEventListener("input", (e) => {
+    stopFc();
+    fc.hours = Number(e.target.value);
+    drawTime();
+  });
+  $("fc-play").addEventListener("click", () => {
+    if (fc.timer) { stopFc(); return; }
+    const max = Number($("fc-time").max);
+    if (fc.hours >= max) fc.hours = 0;
+    $("fc-play").textContent = "⏸ 停止";
+    fc.timer = setInterval(() => {
+      fc.hours = Math.min(fc.hours + FC_STEP, max);
+      $("fc-time").value = String(fc.hours);
+      drawTime();
+      if (fc.hours >= max) stopFc();
+    }, 450);
+  });
 
   /* ---------- 側欄 ---------- */
 
@@ -741,7 +991,8 @@
       const k = b.dataset.agency;
       // 正在用替代機構時，先把它算成已勾選，再切換點的那一個
       const shown = shownAgencies(storm);
-      if (!shown.some((x) => state.enabled.has(x))) shown.forEach((x) => state.enabled.add(x));
+      shown.forEach((x) => state.enabled.add(x));
+      state.agencyTouched = true;
       state.enabled.has(k) ? state.enabled.delete(k) : state.enabled.add(k);
       render();
     }));
@@ -895,6 +1146,10 @@
     }
     if (!sel) intensityLegend = false;
     drawDensity(state.models ? sel : null);
+
+    updateTimeRange(sel);
+    drawTime();
+    renderLoopBar();
 
     $("detail").hidden = !sel;
     if (sel) {
