@@ -47,9 +47,13 @@ class VortexTest(unittest.TestCase):
 def grid(env200=(20.0, 0.0), env850=(-5.0, 0.0), clat=20.0, clon=130.0):
     lat = np.arange(-5, 45.01, 0.5)
     lon = np.arange(100, 165.01, 0.5)
-    u2, v2 = synthetic(lat, lon, clat, clon, env200, gamma=1e7)
-    u8, v8 = synthetic(lat, lon, clat, clon, env850)
-    return {"lat": lat, "lon": lon, ("u", 200): u2, ("v", 200): v2, ("u", 850): u8, ("v", 850): v8}
+    g = {"lat": lat, "lon": lon}
+    # 環境風隨氣壓線性變化，渦旋往高層減弱
+    for p in maps.LEVELS:
+        x = (850 - p) / 650
+        env = (env850[0] + x * (env200[0] - env850[0]), env850[1] + x * (env200[1] - env850[1]))
+        g["u", p], g["v", p] = synthetic(lat, lon, clat, clon, env, gamma=2.5e7 - x * 1.5e7)
+    return g
 
 
 class CropTest(unittest.TestCase):
@@ -65,23 +69,46 @@ class CropTest(unittest.TestCase):
         self.assertAlmostEqual(fr["mean_kt"], 25 / maps.MS_PER_KT, delta=1.5)
         self.assertAlmostEqual(fr["mean_from"], 270, delta=3)
 
+    def test_layer_weights(self):
+        w = maps.layer_weights(maps.LEVELS, 400)
+        self.assertEqual(sorted(w), [400, 500, 600, 700, 850])
+        self.assertAlmostEqual(sum(w.values()), 1)
+        self.assertAlmostEqual(w[850], 75 / 450)
+
+    def test_steering_is_layer_mean_of_environment(self):
+        fr = maps.frame_fields(grid(), 20.0, 130.0)
+        for key, top in (("dlm400", 400), ("dlm300", 300), ("dlm200", 200)):
+            # 線性變化的環境風，氣壓加權平均就是中間氣壓的風：u = -5 + 25 * (850 - 中點) / 650
+            mid = (850 + top) / 2
+            u = -5 + 25 * (850 - mid) / 650
+            pr = fr["products"][key]
+            self.assertAlmostEqual(pr["kt"], abs(u) / maps.MS_PER_KT, delta=1.0, msg=key)
+            self.assertAlmostEqual(pr["dir"], 90 if u > 0 else 270, delta=3, msg=key)  # 去向
+
 
 class IfsDownloadTest(unittest.TestCase):
     def test_falls_back_to_ecmwf_mirror(self):
+        # u 的各層連續存放，v 的各層也連續但與 u 之間隔著別的欄位 → 合併成兩次 Range 請求
+        rows = [("u", str(p)) for p in maps.LEVELS] + [("t", "500")] + [("v", str(p)) for p in maps.LEVELS]
         index = "\n".join(
             '{"levtype": "pl", "param": "%s", "levelist": "%s", "_offset": %d, "_length": 4}' % (p, lev, i * 4)
-            for i, (p, lev) in enumerate([("u", "200"), ("v", "200"), ("u", "850"), ("v", "850")]))
-        urls = []
+            for i, (p, lev) in enumerate(rows))
+        urls, ranges = [], []
 
         def fake(url, offset=None, length=None):
             urls.append(url)
             if url.startswith(maps.IFS_MIRRORS[0]):
                 raise maps.FetchError("HTTPError: HTTP Error 503: Slow Down")
-            return index.encode() if offset is None else b"GRIB"
+            if offset is None:
+                return index.encode()
+            ranges.append((offset, length))
+            return b"G" * length
 
         with mock.patch.object(maps, "_fetch", fake), mock.patch.object(maps.time, "sleep"):
             data = maps.ifs_grib(datetime(2026, 10, 23, tzinfo=timezone.utc), 36)
-        self.assertEqual(data, b"GRIB" * 4)
+        n = len(maps.LEVELS)
+        self.assertEqual(ranges, [(0, 4 * n), (4 * (n + 1), 4 * n)])
+        self.assertEqual(len(data), 8 * n)
         self.assertTrue(urls[1].startswith("https://data.ecmwf.int/forecasts/20261023/00z/ifs/0p25/oper/20261023000000-36h-oper-fc"))
 
 
@@ -108,9 +135,11 @@ class BuildTest(unittest.TestCase):
             gfs = idx["models"]["gfs"]
             self.assertTrue(gfs["complete"])
             self.assertEqual([f["tau"] for f in gfs["storms"][0]["frames"]], [0, 6, 12])
-            first = gfs["storms"][0]["frames"][0]
-            self.assertEqual(first["img"], "gfs/2026102306/29W_000.png")
-            self.assertTrue((out / first["img"]).read_bytes().startswith(b"\x89PNG"))
+            first = gfs["storms"][0]["frames"][0]["maps"]
+            self.assertEqual(sorted(first), ["dlm200", "dlm300", "dlm400", "shear"])
+            self.assertEqual(first["shear"]["img"], "gfs/2026102306/29W_shear_000.png")
+            for m in first.values():
+                self.assertTrue((out / m["img"]).read_bytes().startswith(b"\x89PNG"))
             self.assertEqual(sorted(calls), [0, 0, 6, 12])
 
             # 同一次起報：不再下載，直接沿用
@@ -122,8 +151,8 @@ class BuildTest(unittest.TestCase):
             # 新的起報：舊圖刪掉
             newer = maps.build(self.models("2026-10-23T12:00:00Z"), idx, out, now, {"gfs": fake, "ifs": fake})
             maps.prune(out, newer)
-            self.assertFalse((out / first["img"]).exists())
-            self.assertTrue((out / "gfs/2026102312/29W_000.png").exists())
+            self.assertFalse((out / first["shear"]["img"]).exists())
+            self.assertTrue((out / "gfs/2026102312/29W_dlm300_000.png").exists())
             self.assertFalse((out / "gfs/2026102306").exists())
 
     def test_retry_only_fetches_missing_times(self):

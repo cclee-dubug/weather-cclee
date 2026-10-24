@@ -14,14 +14,21 @@
     ifs: { name: "ECMWF IFS", short: "IFS", family: "ecmwf" },
   };
   const COMPASS = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
+  const PRODUCTS = {
+    shear: { name: "200–850 hPa 垂直風切", chart: "颱風中心 0–500 公里平均風切（kt）" },
+    dlm400: { name: "400–850 hPa 深層駛流", chart: "颱風中心 0–500 公里平均駛流速度（kt），400–850 hPa" },
+    dlm300: { name: "300–850 hPa 深層駛流", chart: "颱風中心 0–500 公里平均駛流速度（kt），300–850 hPa" },
+    dlm200: { name: "200–850 hPa 深層駛流", chart: "颱風中心 0–500 公里平均駛流速度（kt），200–850 hPa" },
+  };
 
-  const state = { data: null, index: null, dataFailed: false, indexFailed: false, selected: null, time: null, timer: null };
+  const state = { data: null, index: null, dataFailed: false, indexFailed: false, selected: null, time: null, timer: null, product: "shear" };
   let chart = null;
   const preloaded = new Set();
 
   const $ = (id) => document.getElementById(id);
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const imgUrl = (f) => `${MAPS_BASE}/${f.img}`;
+  const mapOf = (f) => f.maps?.[state.product];
+  const imgUrl = (f) => `${MAPS_BASE}/${mapOf(f).img}`;
   const label = (ms) => (ms.name && ms.name !== ms.id ? `${ms.name}（${ms.id}）` : ms.id);
 
   // 兩個模式的系統在同一有效時間相距 400 公里內，就當成同一個
@@ -69,6 +76,7 @@
   function preload(entry) {
     for (const ms of Object.values(entry.models)) {
       for (const f of ms.frames) {
+        if (!mapOf(f)) continue;
         const u = imgUrl(f);
         if (preloaded.has(u)) continue;
         preloaded.add(u);
@@ -102,24 +110,29 @@
     const panel = document.querySelector(`.map-panel[data-model="${code}"]`);
     const ms = entry.models[code];
     const m = state.index?.models?.[code];
-    const f = ms?.frames.find((x) => Date.parse(x.valid) === state.time);
+    const f0 = ms?.frames.find((x) => Date.parse(x.valid) === state.time);
+    const f = f0 && mapOf(f0) ? f0 : null;
     const img = panel.querySelector("img");
     const ph = panel.querySelector(".placeholder");
     panel.querySelector(".sub").textContent = m?.init ? `${fmt(m.init)} 起報${f ? `　+${f.tau} 小時` : ""}` : "";
     if (f) {
       if (img.getAttribute("src") !== imgUrl(f)) img.src = imgUrl(f);
-      img.alt = `${MODELS[code].short} ${label(ms)} +${f.tau} 小時的 200–850 hPa 垂直風切圖`;
+      img.alt = `${MODELS[code].short} ${label(ms)} +${f.tau} 小時的 ${PRODUCTS[state.product].name}圖`;
       img.hidden = false;
       ph.hidden = true;
-      const dir = COMPASS[Math.round(f.shear_from / 45) % 8];
-      panel.querySelector(".summary").innerHTML =
-        `中心 500 公里內平均風切 <b>${Math.round(f.shear_kt)} kt</b>，${dir}風切（來自 ${String(f.shear_from).padStart(3, "0")}°）`;
+      const m = mapOf(f);
+      const dir = COMPASS[Math.round(m.dir / 45) % 8];
+      const deg = String(m.dir).padStart(3, "0");
+      panel.querySelector(".summary").innerHTML = state.product === "shear"
+        ? `中心 500 公里內平均風切 <b>${Math.round(m.kt)} kt</b>，${dir}風切（來自 ${deg}°）`
+        : `中心 500 公里內平均駛流 <b>${Math.round(m.kt)} kt</b>，往${dir}（${deg}°）`;
     } else {
       img.hidden = true;
       img.removeAttribute("src");
       ph.hidden = false;
       ph.textContent = !m ? "這個模式的天氣圖還沒產生"
         : !ms ? `${MODELS[code].short} 沒有追蹤到這個颱風`
+        : f0 ? `這張圖還在產生中，下次更新時會出現`
         : `這個時間沒有 ${MODELS[code].short} 的圖（只畫到起報後 120 小時，或模式中颱風已消散）`;
       panel.querySelector(".summary").textContent = "";
     }
@@ -147,7 +160,7 @@
   function renderChart(entry, times) {
     const datasets = Object.entries(entry.models).map(([code, ms]) => ({
       label: MODELS[code].name,
-      data: ms.frames.map((f) => ({ x: Date.parse(f.valid), y: f.shear_kt, f })),
+      data: ms.frames.filter(mapOf).map((f) => ({ x: Date.parse(f.valid), y: mapOf(f).kt, f })),
       borderColor: css(`--model-${MODELS[code].family}`),
       backgroundColor: css(`--model-${MODELS[code].family}`),
       borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, tension: 0,
@@ -224,10 +237,12 @@
 
     for (const code of Object.keys(MODELS)) renderPanel(code, entry);
     preload(entry);
-    if (chart && chart.$entryKey === entry.key && chart.$times === times.join()) chart.draw();
+    $("trend-title").textContent = PRODUCTS[state.product].chart;
+    const chartKey = `${entry.key}|${state.product}|${times.join()}`;
+    if (chart && chart.$key === chartKey) chart.draw();
     else {
       renderChart(entry, times);
-      if (chart) { chart.$entryKey = entry.key; chart.$times = times.join(); }
+      if (chart) chart.$key = chartKey;
     }
   }
 
@@ -258,6 +273,18 @@
       render();
     }, PLAY_MS);
   }
+
+  function setProduct(p) {
+    if (!PRODUCTS[p]) return;
+    state.product = p;
+    document.querySelectorAll("#product-tabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.product === p)));
+    TcCommon.store.set("tc-maps-product", p);
+  }
+  document.querySelectorAll("#product-tabs button").forEach((b) => b.addEventListener("click", () => {
+    setProduct(b.dataset.product);
+    render();
+  }));
+  setProduct(TcCommon.store.get("tc-maps-product") || "shear");
 
   $("prev").addEventListener("click", () => { stop(); step(-1); });
   $("next").addEventListener("click", () => { stop(); step(1); });

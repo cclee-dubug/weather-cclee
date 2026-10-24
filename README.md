@@ -30,7 +30,8 @@ GIBS 圖磚是依色標上色的 PNG，網頁讀回像素、用 `assets/colormap
 
 **模式天氣圖**（`model.html`）：以各模式自己預報的颱風位置為中心，畫出 0 到 120 小時每 6 小時一張的天氣圖，GFS 與 IFS 依有效時間並排比較。目前有：
 
-- **200–850 hPa 環境垂直風切（去除渦旋）**：GFS 從 [NOMADS grib filter](https://nomads.ncep.noaa.gov/gribfilter.php?ds=gfs_0p25) 只下載 200、850 hPa 的 u、v；IFS 從 ECMWF 開放資料依 `.index` 以 HTTP Range 只下載這四個場。颱風中心 500 公里內的渦度與輻散用 Green 函數反推風場後扣除（Davis et al. 2008 的方法，`fetcher/vortex.py`），剩下的環境風場再相減；另算 500 公里內的平均風切（與 SHIPS 的 SHDC 定義相同）。
+- **200–850 hPa 環境垂直風切（去除渦旋）**：GFS 從 [NOMADS grib filter](https://nomads.ncep.noaa.gov/gribfilter.php?ds=gfs_0p25) 只下載 850～200 hPa 八層的 u、v；IFS 從 ECMWF 開放資料依 `.index` 以 HTTP Range 只下載這些場。颱風中心 500 公里內的渦度與輻散用 Green 函數反推風場後扣除（Davis et al. 2008 的方法，`fetcher/vortex.py`），剩下的環境風場再相減；另算 500 公里內的平均風切（與 SHIPS 的 SHDC 定義相同）。
+- **深層駛流（去除渦旋）**：400–850、300–850、200–850 hPa 三種。850、700、600、500、400、300、250、200 hPa 各層分別去除渦旋後，依氣壓加權（梯形積分）平均；圖上紅色箭頭是 500 公里內平均駛流移動 24 小時的距離。
 
 各機構風速定義不同，同一個颱風 JTWC 的數值通常較高，不宜直接比較大小。本站資料僅供參考，防災決策請以中央氣象署發布的資訊為準。
 
