@@ -53,12 +53,12 @@
     data: null,
     selected: null,
     unit: "kt",
-    enabled: new Set(AGENCY_ORDER),
+    enabled: new Set(["cwa"]), // 預設只顯示中央氣象署；颱風沒有氣象署資料時改用第一個有資料的機構
     showPast: true,
     showCone: false,
     models: null,
     modelsFailed: false,
-    modelOn: new Set(["gfs", "ifs"]),
+    modelOn: new Set(), // 預設不顯示模式路徑
     density: "off", // 系集路徑密度：off、gefs、eps
     trackColor: "model", // 模式路徑顏色：model 依模式、intensity 依強度
     showEllipse: false,
@@ -107,8 +107,8 @@
       esriLabels("Reference/World_Boundaries_and_Places"),
     ])],
   };
-  const savedBase = store.get("tc-basemap");
-  (BASEMAPS[savedBase] || BASEMAPS.ocean)[1].addTo(map);
+  // 打開網頁時一律是衛星影像＋衛星雲圖（不記住上次的選擇）
+  BASEMAPS.satellite[1].addTo(map);
 
   // 海表面溫度：NASA GIBS 的 GHRSST MUR 每日海溫圖磚，日期與網址樣板由 data/latest.json 提供；
   // 在瀏覽器裡依 GIBS 色標還原溫度後改用自己的色階（26 °C 以上分得較細）
@@ -139,47 +139,40 @@
   let densityInfo = null; // { code, init, members }，給圖例用
   let intensityLegend = false; // 模式路徑依強度上色時顯示色階
 
-  // BD 雲圖是不透明的灰階，另外疊上海岸線
-  const coastTiles = L.tileLayer(`${GIBS}/Coastlines_15m/default/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png`, {
-    pane: "coast", bounds: [[-85, -180], [85, 180]],
-  });
+  // 海岸線：Natural Earth 1:50m（與模式天氣圖同一份），畫在雲圖之上；深色外框加亮黃色線，
+  // 疊在白色雲頂、衛星影像或淺色海洋底圖上都看得清楚
+  const COAST_NAME = "海岸線";
+  const coastGroup = L.layerGroup();
+  const coastRenderer = L.canvas({ pane: "coast", padding: 0.3 });
+  fetch("fetcher/coast_wpac.json")
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then((lines) => {
+      const ll = lines.map((line) => line.map(([lon, lat]) => [lat, lon]));
+      const opts = { renderer: coastRenderer, interactive: false, smoothFactor: 1.5 };
+      coastGroup.addLayer(L.polyline(ll, { ...opts, color: "#101820", weight: 3.2, opacity: 0.75 }));
+      coastGroup.addLayer(L.polyline(ll, { ...opts, color: "#ffe14d", weight: 1.3, opacity: 1 }));
+    })
+    .catch((e) => console.warn("讀取海岸線失敗", e));
 
   L.control.layers(
-    Object.fromEntries(Object.values(BASEMAPS)), { [SST_NAME]: sstGroup, [CLOUD_NAME]: cloudGroup, [BD_NAME]: bdGroup },
+    Object.fromEntries(Object.values(BASEMAPS)),
+    { [SST_NAME]: sstGroup, [CLOUD_NAME]: cloudGroup, [BD_NAME]: bdGroup, [COAST_NAME]: coastGroup },
     { position: "topright", collapsed: false },
   ).addTo(map);
-  if (store.get("tc-sst") !== "off") sstGroup.addTo(map);
-  if (store.get("tc-bd") === "on") {
-    bdGroup.addTo(map);
-    coastTiles.addTo(map);
-  } else if (store.get("tc-cloud") !== "off") {
-    cloudGroup.addTo(map);
-  }
+  cloudGroup.addTo(map);
+  coastGroup.addTo(map);
 
-  map.on("baselayerchange", (e) => {
-    store.set("tc-basemap", Object.keys(BASEMAPS).find((k) => BASEMAPS[k][1] === e.layer));
-  });
   map.on("overlayadd overlayremove", (e) => {
-    const on = e.type === "overlayadd" ? "on" : "off";
-    if (e.layer === sstGroup) store.set("tc-sst", on);
+    const on = e.type === "overlayadd";
     // 兩種雲圖擇一顯示：BD 雲圖不透明，同時開會把另一張蓋住。
     // 等圖層控制項處理完這次點擊再關另一張，否則控制項會依舊的勾選狀態把它加回來
-    if (e.layer === cloudGroup) {
-      store.set("tc-cloud", on);
-      if (on === "on") {
-        setTimeout(() => map.removeLayer(bdGroup));
-        refreshClouds();
-      }
+    if (e.layer === cloudGroup && on) {
+      setTimeout(() => map.removeLayer(bdGroup));
+      refreshClouds();
     }
-    if (e.layer === bdGroup) {
-      store.set("tc-bd", on);
-      if (on === "on") {
-        setTimeout(() => map.removeLayer(cloudGroup));
-        coastTiles.addTo(map);
-        refreshBd();
-      } else {
-        map.removeLayer(coastTiles);
-      }
+    if (e.layer === bdGroup && on) {
+      setTimeout(() => map.removeLayer(cloudGroup));
+      refreshBd();
     }
     renderLegend();
   });
@@ -407,7 +400,7 @@
     const bounds = [];
     for (const agency of AGENCY_ORDER) {
       const a = storm.agencies[agency];
-      if (!a || !state.enabled.has(agency) || !a.points?.length) continue;
+      if (!a || !isShown(storm, agency) || !a.points?.length) continue;
       const c = color(agency);
       const fade = selected ? 1 : 0.35;
       const pts = a.points.map((p) => [p.lat, p.lon]);
@@ -633,7 +626,7 @@
     if (!state.prevCount) return;
     for (const agency of AGENCY_ORDER) {
       const a = storm.agencies[agency];
-      if (!a || !state.enabled.has(agency)) continue;
+      if (!a || !isShown(storm, agency)) continue;
       const c = color(agency);
       const reports = previousReports(a);
       reports.forEach((h, i) => {
@@ -690,8 +683,15 @@
     renderLegend();
   }
 
+  // 這個颱風要畫的機構：勾選的機構裡有資料的；一個都沒有時（例如氣象署沒發布）改用第一個有資料的機構
+  function shownAgencies(storm) {
+    const has = AGENCY_ORDER.filter((k) => storm.agencies[k]?.points?.length);
+    const on = has.filter((k) => state.enabled.has(k));
+    return on.length ? on : has.slice(0, 1);
+  }
+  const isShown = (storm, k) => shownAgencies(storm).includes(k);
   function firstEnabled(storm) {
-    return AGENCY_ORDER.find((k) => state.enabled.has(k) && storm.agencies[k]?.points?.length);
+    return shownAgencies(storm)[0];
   }
 
   /* ---------- 側欄 ---------- */
@@ -734,11 +734,14 @@
     const box = $("agency-toggles");
     box.innerHTML = AGENCY_ORDER.filter((k) => storm.agencies[k]).map((k) => {
       const stale = storm.agencies[k].stale ? `<span class="stale">舊資料</span>` : "";
-      return `<button type="button" class="agency-chip" data-agency="${k}" aria-pressed="${state.enabled.has(k)}">
+      return `<button type="button" class="agency-chip" data-agency="${k}" aria-pressed="${isShown(storm, k)}">
         ${shapeSvg(AGENCIES[k].shape, color(k), 12, 0)}${esc(AGENCIES[k].name)}${stale}</button>`;
     }).join("");
     box.querySelectorAll(".agency-chip").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.agency;
+      // 正在用替代機構時，先把它算成已勾選，再切換點的那一個
+      const shown = shownAgencies(storm);
+      if (!shown.some((x) => state.enabled.has(x))) shown.forEach((x) => state.enabled.add(x));
       state.enabled.has(k) ? state.enabled.delete(k) : state.enabled.add(k);
       render();
     }));
@@ -773,19 +776,17 @@
     box.querySelectorAll(".model-chip").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.model;
       state.modelOn.has(k) ? state.modelOn.delete(k) : state.modelOn.add(k);
-      store.set("tc-models", [...state.modelOn].join(",") || "none");
       render();
     }));
     box.querySelectorAll("[data-density]").forEach((b) => b.addEventListener("click", () => {
       state.density = b.dataset.density;
-      store.set("tc-density", state.density);
       render();
     }));
   }
 
   let chart = null;
   function renderChart(storm) {
-    const datasets = AGENCY_ORDER.filter((k) => storm.agencies[k] && state.enabled.has(k)).map((k) => ({
+    const datasets = AGENCY_ORDER.filter((k) => storm.agencies[k] && isShown(storm, k)).map((k) => ({
       label: AGENCIES[k].name,
       data: storm.agencies[k].points
         .map((p) => ({ x: Date.parse(p.time), y: wind(p.vmax_kt, p.vmax_ms), p }))
@@ -803,7 +804,7 @@
     if (state.prevCount) {
       for (const k of AGENCY_ORDER) {
         const a = storm.agencies[k];
-        if (!a || !state.enabled.has(k)) continue;
+        if (!a || !isShown(storm, k)) continue;
         const reports = previousReports(a);
         reports.forEach((h, i) => {
           const alpha = Math.round(prevOpacity(i, reports.length) * 255).toString(16).padStart(2, "0");
@@ -851,7 +852,7 @@
   }
 
   function renderTable(storm) {
-    const agencies = AGENCY_ORDER.filter((k) => storm.agencies[k] && state.enabled.has(k));
+    const agencies = AGENCY_ORDER.filter((k) => storm.agencies[k] && isShown(storm, k));
     const times = [...new Set(agencies.flatMap((k) => storm.agencies[k].points.map((p) => p.time)))].sort();
     const head = `<thead><tr><th>時間</th>${agencies.map((k) => `<th>${AGENCIES[k].short}</th>`).join("")}</tr></thead>`;
     const body = times.map((t) => {
@@ -954,22 +955,22 @@
   $("show-past").addEventListener("change", (e) => { state.showPast = e.target.checked; render(); });
   $("show-cone").addEventListener("change", (e) => { state.showCone = e.target.checked; render(); });
 
-  // 選項按鈕組：記在瀏覽器，重新整理後保留
-  function segmented(id, attr, key, parse = (v) => v) {
+  // 選項按鈕組；remember 為 true 時記在瀏覽器，重新整理後保留
+  function segmented(id, attr, key, parse = (v) => v, remember = true) {
     const buttons = [...$(id).querySelectorAll(`[data-${attr}]`)];
     const apply = (v) => {
       state[key] = parse(v);
       buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(v))));
     };
-    const saved = store.get(`tc-${attr}`);
+    const saved = remember ? store.get(`tc-${attr}`) : null;
     if (buttons.some((b) => b.dataset[attr] === saved)) apply(saved);
     buttons.forEach((b) => b.addEventListener("click", () => {
       apply(b.dataset[attr]);
-      store.set(`tc-${attr}`, b.dataset[attr]);
+      if (remember) store.set(`tc-${attr}`, b.dataset[attr]);
       render();
     }));
   }
-  segmented("prev-count", "prev", "prevCount", Number);
+  segmented("prev-count", "prev", "prevCount", Number, false);  // 打開網頁時一律關閉
   segmented("track-color", "color", "trackColor");
   for (const [id, key, storeKey] of [["show-ellipse", "showEllipse", "tc-ellipse"], ["show-hours", "showHours", "tc-hours"]]) {
     state[key] = store.get(storeKey) === "on";
@@ -981,9 +982,6 @@
     });
   }
 
-  const savedModels = store.get("tc-models");
-  if (savedModels) state.modelOn = new Set(savedModels.split(",").filter((k) => MODELS[k]));
-  if (ENSEMBLE_SIZE[store.get("tc-density")]) state.density = store.get("tc-density");
 
   try {
     const u = localStorage.getItem("tc-unit");
