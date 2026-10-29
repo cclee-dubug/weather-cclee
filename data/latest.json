@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-29T09:44:15Z",
+ "checked_at": "2026-10-29T10:14:16Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -9,8 +9,7 @@
   },
   "cwa": {
    "name": "中央氣象署",
-   "status": "error",
-   "message": "URLError: timed out",
+   "status": "ok",
    "count": 1
   },
   "jtwc": {
@@ -1869,8 +1868,7 @@
         }
        ]
       }
-     ],
-     "stale": true
+     ]
     },
     "jtwc": {
      "id": "wp3026",
@@ -2770,8 +2768,8 @@
    "max_zoom": 7,
    "template": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png",
    "legend": "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
-   "checked_at": "2026-10-29T06:44:16Z"
+   "checked_at": "2026-10-29T10:14:16Z"
   }
  },
- "updated_at": "2026-10-29T09:44:15Z"
+ "updated_at": "2026-10-29T10:14:16Z"
 }
