@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-30T03:44:16Z",
+ "checked_at": "2026-10-30T06:44:16Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -36,7 +36,7 @@
      "name_en": "In-fa",
      "name_local": "インファ",
      "category": "TY",
-     "issued": "2026-10-30T03:45:00Z",
+     "issued": "2026-10-30T06:45:00Z",
      "wind_avg_min": 10,
      "past": [
       {
@@ -328,14 +328,19 @@
        "lat": 18.3,
        "lon": 147.0,
        "stage": "ts"
+      },
+      {
+       "lat": 18.8,
+       "lon": 146.2,
+       "stage": "ts"
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-10-30T03:00:00Z",
-       "lat": 18.3,
-       "lon": 147.0,
+       "time": "2026-10-30T06:00:00Z",
+       "lat": 18.8,
+       "lon": 146.2,
        "vmax_kt": 90.0,
        "vmax_ms": 45.0,
        "gust_kt": 130.0,
@@ -347,9 +352,9 @@
       },
       {
        "tau": 12,
-       "time": "2026-10-30T15:00:00Z",
-       "lat": 20.0,
-       "lon": 144.2,
+       "time": "2026-10-30T18:00:00Z",
+       "lat": 20.4,
+       "lon": 143.7,
        "vmax_kt": 90.0,
        "vmax_ms": 45.0,
        "gust_kt": 130.0,
@@ -361,8 +366,8 @@
       },
       {
        "tau": 24,
-       "time": "2026-10-31T03:00:00Z",
-       "lat": 21.7,
+       "time": "2026-10-31T06:00:00Z",
+       "lat": 22.1,
        "lon": 142.9,
        "vmax_kt": 90.0,
        "vmax_ms": 45.0,
@@ -374,9 +379,9 @@
        "r_storm_km": null
       },
       {
-       "tau": 45,
-       "time": "2026-11-01T00:00:00Z",
-       "lat": 22.8,
+       "tau": 48,
+       "time": "2026-11-01T06:00:00Z",
+       "lat": 22.6,
        "lon": 143.9,
        "vmax_kt": 85.0,
        "vmax_ms": 45.0,
@@ -388,10 +393,10 @@
        "r_storm_km": null
       },
       {
-       "tau": 69,
-       "time": "2026-11-02T00:00:00Z",
-       "lat": 22.0,
-       "lon": 141.0,
+       "tau": 72,
+       "time": "2026-11-02T06:00:00Z",
+       "lat": 22.4,
+       "lon": 140.7,
        "vmax_kt": 90.0,
        "vmax_ms": 45.0,
        "gust_kt": 130.0,
@@ -402,10 +407,10 @@
        "r_storm_km": null
       },
       {
-       "tau": 93,
-       "time": "2026-11-03T00:00:00Z",
-       "lat": 22.0,
-       "lon": 138.0,
+       "tau": 96,
+       "time": "2026-11-03T06:00:00Z",
+       "lat": 23.1,
+       "lon": 139.1,
        "vmax_kt": 90.0,
        "vmax_ms": 45.0,
        "gust_kt": 130.0,
@@ -416,53 +421,53 @@
        "r_storm_km": null
       },
       {
-       "tau": 117,
-       "time": "2026-11-04T00:00:00Z",
-       "lat": 23.0,
-       "lon": 136.8,
-       "vmax_kt": 90.0,
+       "tau": 120,
+       "time": "2026-11-04T06:00:00Z",
+       "lat": 24.8,
+       "lon": 138.9,
+       "vmax_kt": 85.0,
        "vmax_ms": 45.0,
-       "gust_kt": 130.0,
-       "pres_hpa": 940.0,
+       "gust_kt": 120.0,
+       "pres_hpa": 950.0,
        "category": "TY",
-       "r70_km": 280.0,
+       "r70_km": 330.0,
        "r_gale_km": null,
        "r_storm_km": null
       }
      ],
      "previous": [
       {
-       "issued": "2026-10-30T00:45:00Z",
+       "issued": "2026-10-30T03:45:00Z",
        "points": [
         {
          "tau": 0,
-         "time": "2026-10-30T00:00:00Z",
-         "lat": 17.9,
-         "lon": 147.8,
+         "time": "2026-10-30T03:00:00Z",
+         "lat": 18.3,
+         "lon": 147.0,
          "vmax_kt": 90.0,
          "vmax_ms": 45.0,
          "pres_hpa": 940.0
         },
         {
          "tau": 12,
-         "time": "2026-10-30T12:00:00Z",
-         "lat": 19.5,
-         "lon": 144.8,
+         "time": "2026-10-30T15:00:00Z",
+         "lat": 20.0,
+         "lon": 144.2,
          "vmax_kt": 90.0,
          "vmax_ms": 45.0,
          "pres_hpa": 940.0
         },
         {
          "tau": 24,
-         "time": "2026-10-31T00:00:00Z",
-         "lat": 21.3,
+         "time": "2026-10-31T03:00:00Z",
+         "lat": 21.7,
          "lon": 142.9,
          "vmax_kt": 90.0,
          "vmax_ms": 45.0,
          "pres_hpa": 940.0
         },
         {
-         "tau": 48,
+         "tau": 45,
          "time": "2026-11-01T00:00:00Z",
          "lat": 22.8,
          "lon": 143.9,
@@ -471,7 +476,7 @@
          "pres_hpa": 950.0
         },
         {
-         "tau": 72,
+         "tau": 69,
          "time": "2026-11-02T00:00:00Z",
          "lat": 22.0,
          "lon": 141.0,
@@ -480,7 +485,7 @@
          "pres_hpa": 940.0
         },
         {
-         "tau": 96,
+         "tau": 93,
          "time": "2026-11-03T00:00:00Z",
          "lat": 22.0,
          "lon": 138.0,
@@ -489,7 +494,7 @@
          "pres_hpa": 940.0
         },
         {
-         "tau": 120,
+         "tau": 117,
          "time": "2026-11-04T00:00:00Z",
          "lat": 23.0,
          "lon": 136.8,
@@ -2819,8 +2824,8 @@
    "max_zoom": 7,
    "template": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png",
    "legend": "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
-   "checked_at": "2026-10-30T03:44:16Z"
+   "checked_at": "2026-10-30T06:44:16Z"
   }
  },
- "updated_at": "2026-10-30T03:44:16Z"
+ "updated_at": "2026-10-30T06:44:16Z"
 }
