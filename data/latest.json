@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-30T21:44:16Z",
+ "checked_at": "2026-10-30T23:44:15Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -2865,13 +2865,13 @@
   "sst": {
    "status": "ok",
    "layer": "GHRSST_L4_MUR_Sea_Surface_Temperature",
-   "date": "2026-10-28",
+   "date": "2026-10-29",
    "tile_matrix_set": "GoogleMapsCompatible_Level7",
    "max_zoom": 7,
    "template": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png",
    "legend": "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
-   "checked_at": "2026-10-30T20:14:17Z"
+   "checked_at": "2026-10-30T23:44:15Z"
   }
  },
- "updated_at": "2026-10-30T21:44:16Z"
+ "updated_at": "2026-10-30T23:44:15Z"
 }
