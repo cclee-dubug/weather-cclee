@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-10-30T20:14:17Z",
+ "checked_at": "2026-10-30T20:44:17Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -1985,7 +1985,7 @@
        "vmax_kt": 115.0,
        "vmax_ms": 59.2,
        "gust_kt": 140.0,
-       "pres_hpa": 951.0,
+       "pres_hpa": null,
        "radii_nm": {
         "r64": {
          "ne": 70.0,
@@ -2868,5 +2868,5 @@
    "checked_at": "2026-10-30T20:14:17Z"
   }
  },
- "updated_at": "2026-10-30T20:14:17Z"
+ "updated_at": "2026-10-30T20:44:17Z"
 }
