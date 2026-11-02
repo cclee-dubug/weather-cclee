@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-02T06:44:15Z",
+ "checked_at": "2026-11-02T07:44:20Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -9,7 +9,8 @@
   },
   "cwa": {
    "name": "中央氣象署",
-   "status": "ok",
+   "status": "error",
+   "message": "URLError: [Errno -5] No address associated with hostname",
    "count": 1
   },
   "jtwc": {
@@ -2065,7 +2066,8 @@
         }
        ]
       }
-     ]
+     ],
+     "stale": true
     },
     "jtwc": {
      "id": "wp3026",
@@ -2932,5 +2934,5 @@
    "checked_at": "2026-11-02T06:44:15Z"
   }
  },
- "updated_at": "2026-11-02T06:44:15Z"
+ "updated_at": "2026-11-02T07:44:20Z"
 }
