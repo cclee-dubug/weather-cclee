@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-03T00:44:16Z",
+ "checked_at": "2026-11-03T01:14:16Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -36,7 +36,7 @@
      "name_en": "In-fa",
      "name_local": "インファ",
      "category": "STS",
-     "issued": "2026-11-02T21:45:00Z",
+     "issued": "2026-11-03T00:45:00Z",
      "wind_avg_min": 10,
      "past": [
       {
@@ -478,18 +478,23 @@
        "lat": 23.1,
        "lon": 139.7,
        "stage": "ts"
+      },
+      {
+       "lat": 23.1,
+       "lon": 139.3,
+       "stage": "ts"
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-11-02T21:00:00Z",
+       "time": "2026-11-03T00:00:00Z",
        "lat": 23.1,
-       "lon": 139.7,
-       "vmax_kt": 55.0,
+       "lon": 139.3,
+       "vmax_kt": 60.0,
        "vmax_ms": 30.0,
-       "gust_kt": 80.0,
-       "pres_hpa": 980.0,
+       "gust_kt": 85.0,
+       "pres_hpa": 975.0,
        "category": "STS",
        "r70_km": null,
        "r_gale_km": 280.0,
@@ -497,9 +502,9 @@
       },
       {
        "tau": 24,
-       "time": "2026-11-03T21:00:00Z",
-       "lat": 24.2,
-       "lon": 138.5,
+       "time": "2026-11-04T00:00:00Z",
+       "lat": 24.5,
+       "lon": 138.4,
        "vmax_kt": 60.0,
        "vmax_ms": 30.0,
        "gust_kt": 85.0,
@@ -510,10 +515,10 @@
        "r_storm_km": null
       },
       {
-       "tau": 45,
-       "time": "2026-11-04T18:00:00Z",
-       "lat": 26.4,
-       "lon": 138.7,
+       "tau": 48,
+       "time": "2026-11-05T00:00:00Z",
+       "lat": 27.9,
+       "lon": 139.4,
        "vmax_kt": 60.0,
        "vmax_ms": 30.0,
        "gust_kt": 85.0,
@@ -524,58 +529,58 @@
        "r_storm_km": null
       },
       {
-       "tau": 69,
-       "time": "2026-11-05T18:00:00Z",
-       "lat": 32.6,
-       "lon": 144.9,
-       "vmax_kt": 60.0,
-       "vmax_ms": 30.0,
-       "gust_kt": 85.0,
+       "tau": 72,
+       "time": "2026-11-06T00:00:00Z",
+       "lat": 36.3,
+       "lon": 149.9,
+       "vmax_kt": 65.0,
+       "vmax_ms": 35.0,
+       "gust_kt": 95.0,
        "pres_hpa": 980.0,
-       "category": "STS",
-       "r70_km": 185.0,
+       "category": "TY",
+       "r70_km": 220.0,
        "r_gale_km": null,
        "r_storm_km": null
       },
       {
-       "tau": 93,
-       "time": "2026-11-06T18:00:00Z",
-       "lat": 43.9,
-       "lon": 164.2,
-       "vmax_kt": 60.0,
+       "tau": 96,
+       "time": "2026-11-07T00:00:00Z",
+       "lat": 47.5,
+       "lon": 170.0,
+       "vmax_kt": 55.0,
        "vmax_ms": 30.0,
-       "gust_kt": 85.0,
+       "gust_kt": 80.0,
        "pres_hpa": 980.0,
        "category": "LOW",
-       "r70_km": 320.0,
+       "r70_km": 370.0,
        "r_gale_km": null,
        "r_storm_km": null
       }
      ],
      "previous": [
       {
-       "issued": "2026-11-02T18:45:00Z",
+       "issued": "2026-11-02T21:45:00Z",
        "points": [
         {
          "tau": 0,
-         "time": "2026-11-02T18:00:00Z",
+         "time": "2026-11-02T21:00:00Z",
          "lat": 23.1,
-         "lon": 139.8,
+         "lon": 139.7,
          "vmax_kt": 55.0,
          "vmax_ms": 30.0,
          "pres_hpa": 980.0
         },
         {
          "tau": 24,
-         "time": "2026-11-03T18:00:00Z",
-         "lat": 24.0,
-         "lon": 138.6,
+         "time": "2026-11-03T21:00:00Z",
+         "lat": 24.2,
+         "lon": 138.5,
          "vmax_kt": 60.0,
          "vmax_ms": 30.0,
          "pres_hpa": 975.0
         },
         {
-         "tau": 48,
+         "tau": 45,
          "time": "2026-11-04T18:00:00Z",
          "lat": 26.4,
          "lon": 138.7,
@@ -584,7 +589,7 @@
          "pres_hpa": 975.0
         },
         {
-         "tau": 72,
+         "tau": 69,
          "time": "2026-11-05T18:00:00Z",
          "lat": 32.6,
          "lon": 144.9,
@@ -593,7 +598,7 @@
          "pres_hpa": 980.0
         },
         {
-         "tau": 96,
+         "tau": 93,
          "time": "2026-11-06T18:00:00Z",
          "lat": 43.9,
          "lon": 164.2,
@@ -2858,5 +2863,5 @@
    "checked_at": "2026-11-03T00:44:16Z"
   }
  },
- "updated_at": "2026-11-03T00:44:16Z"
+ "updated_at": "2026-11-03T01:14:16Z"
 }
