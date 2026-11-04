@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-04T12:14:17Z",
+ "checked_at": "2026-11-04T12:44:17Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -2553,8 +2553,8 @@
    "template": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png",
    "legend": "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
    "checked_at": "2026-11-04T05:44:17Z",
-   "message": "更新失敗，沿用上次：HTTP 500"
+   "message": "更新失敗，沿用上次：TimeoutError: The read operation timed out"
   }
  },
- "updated_at": "2026-11-04T12:14:17Z"
+ "updated_at": "2026-11-04T12:44:17Z"
 }
