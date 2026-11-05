@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-05T19:44:17Z",
+ "checked_at": "2026-11-05T21:44:17Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -36,7 +36,7 @@
      "name_en": "In-fa",
      "name_local": "インファ",
      "category": "STS",
-     "issued": "2026-11-05T18:45:00Z",
+     "issued": "2026-11-05T21:45:00Z",
      "wind_avg_min": 10,
      "past": [
       {
@@ -593,14 +593,19 @@
        "lat": 33.9,
        "lon": 147.8,
        "stage": "ts"
+      },
+      {
+       "lat": 35.9,
+       "lon": 150.0,
+       "stage": "ts"
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-11-05T18:00:00Z",
-       "lat": 33.9,
-       "lon": 147.8,
+       "time": "2026-11-05T21:00:00Z",
+       "lat": 35.9,
+       "lon": 150.0,
        "vmax_kt": 50.0,
        "vmax_ms": 25.0,
        "gust_kt": 70.0,
@@ -612,9 +617,9 @@
       },
       {
        "tau": 12,
-       "time": "2026-11-06T06:00:00Z",
-       "lat": 41.9,
-       "lon": 157.9,
+       "time": "2026-11-06T09:00:00Z",
+       "lat": 43.7,
+       "lon": 160.8,
        "vmax_kt": 50.0,
        "vmax_ms": 25.0,
        "gust_kt": 70.0,
@@ -626,9 +631,9 @@
       },
       {
        "tau": 24,
-       "time": "2026-11-06T18:00:00Z",
-       "lat": 47.4,
-       "lon": 166.9,
+       "time": "2026-11-06T21:00:00Z",
+       "lat": 47.8,
+       "lon": 168.2,
        "vmax_kt": 50.0,
        "vmax_ms": 25.0,
        "gust_kt": 70.0,
@@ -640,6 +645,38 @@
       }
      ],
      "previous": [
+      {
+       "issued": "2026-11-05T18:45:00Z",
+       "points": [
+        {
+         "tau": 0,
+         "time": "2026-11-05T18:00:00Z",
+         "lat": 33.9,
+         "lon": 147.8,
+         "vmax_kt": 50.0,
+         "vmax_ms": 25.0,
+         "pres_hpa": 985.0
+        },
+        {
+         "tau": 12,
+         "time": "2026-11-06T06:00:00Z",
+         "lat": 41.9,
+         "lon": 157.9,
+         "vmax_kt": 50.0,
+         "vmax_ms": 25.0,
+         "pres_hpa": 984.0
+        },
+        {
+         "tau": 24,
+         "time": "2026-11-06T18:00:00Z",
+         "lat": 47.4,
+         "lon": 166.9,
+         "vmax_kt": 50.0,
+         "vmax_ms": 25.0,
+         "pres_hpa": 984.0
+        }
+       ]
+      },
       {
        "issued": "2026-11-05T15:45:00Z",
        "points": [
@@ -865,56 +902,6 @@
          "vmax_kt": 60.0,
          "vmax_ms": 30.0,
          "pres_hpa": 976.0
-        }
-       ]
-      },
-      {
-       "issued": "2026-11-04T03:45:00Z",
-       "points": [
-        {
-         "tau": 0,
-         "time": "2026-11-04T03:00:00Z",
-         "lat": 24.5,
-         "lon": 138.5,
-         "vmax_kt": 65.0,
-         "vmax_ms": 35.0,
-         "pres_hpa": 970.0
-        },
-        {
-         "tau": 12,
-         "time": "2026-11-04T15:00:00Z",
-         "lat": 26.4,
-         "lon": 138.6,
-         "vmax_kt": 65.0,
-         "vmax_ms": 35.0,
-         "pres_hpa": 970.0
-        },
-        {
-         "tau": 24,
-         "time": "2026-11-05T03:00:00Z",
-         "lat": 28.9,
-         "lon": 140.3,
-         "vmax_kt": 60.0,
-         "vmax_ms": 30.0,
-         "pres_hpa": 975.0
-        },
-        {
-         "tau": 45,
-         "time": "2026-11-06T00:00:00Z",
-         "lat": 37.0,
-         "lon": 150.4,
-         "vmax_kt": 65.0,
-         "vmax_ms": 35.0,
-         "pres_hpa": 970.0
-        },
-        {
-         "tau": 69,
-         "time": "2026-11-07T00:00:00Z",
-         "lat": 48.7,
-         "lon": 167.6,
-         "vmax_kt": 55.0,
-         "vmax_ms": 30.0,
-         "pres_hpa": 968.0
         }
        ]
       }
@@ -2252,8 +2239,8 @@
    "max_zoom": 7,
    "template": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png",
    "legend": "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
-   "checked_at": "2026-11-05T16:44:26Z"
+   "checked_at": "2026-11-05T21:44:17Z"
   }
  },
- "updated_at": "2026-11-05T19:44:17Z"
+ "updated_at": "2026-11-05T21:44:17Z"
 }
