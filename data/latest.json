@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-05T19:14:19Z",
+ "checked_at": "2026-11-05T19:44:17Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -9,8 +9,7 @@
   },
   "cwa": {
    "name": "中央氣象署",
-   "status": "error",
-   "message": "URLError: [Errno 104] Connection reset by peer",
+   "status": "ok",
    "count": 1
   },
   "jtwc": {
@@ -1821,8 +1820,7 @@
         }
        ]
       }
-     ],
-     "stale": true
+     ]
     },
     "jtwc": {
      "id": "wp3026",
@@ -2257,5 +2255,5 @@
    "checked_at": "2026-11-05T16:44:26Z"
   }
  },
- "updated_at": "2026-11-05T19:14:19Z"
+ "updated_at": "2026-11-05T19:44:17Z"
 }
