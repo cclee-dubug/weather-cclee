@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-09T19:14:19Z",
+ "checked_at": "2026-11-09T19:44:19Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -734,7 +734,7 @@
      "name_en": "Cempaka",
      "name_local": "查帕卡",
      "year": 2026,
-     "issued": "2026-11-09T12:00:00Z",
+     "issued": "2026-11-09T18:00:00Z",
      "wind_avg_min": 10,
      "past": [
       {
@@ -834,72 +834,79 @@
        "time": "2026-11-09T06:00:00Z",
        "vmax_ms": 38.0,
        "pres_hpa": 960.0
+      },
+      {
+       "lat": 24.3,
+       "lon": 135.4,
+       "time": "2026-11-09T12:00:00Z",
+       "vmax_ms": 38.0,
+       "pres_hpa": 960.0
       }
      ],
      "points": [
       {
        "tau": 0,
-       "time": "2026-11-09T12:00:00Z",
-       "lat": 24.3,
-       "lon": 135.4,
-       "vmax_kt": 74,
-       "vmax_ms": 38.0,
-       "gust_kt": 93,
-       "pres_hpa": 960.0,
-       "r70_km": null,
-       "r_gale_km": 150.0,
-       "r_storm_km": 50.0,
-       "r_gale_quad_km": {
-        "ne": 160.0,
-        "se": 120.0,
-        "sw": 120.0,
-        "nw": 180.0
-       }
-      },
-      {
-       "tau": 6,
        "time": "2026-11-09T18:00:00Z",
-       "lat": 24.8,
+       "lat": 24.7,
        "lon": 136.6,
        "vmax_kt": 78,
        "vmax_ms": 40.0,
        "gust_kt": 97,
-       "pres_hpa": 950.0,
+       "pres_hpa": 955.0,
+       "r70_km": null,
+       "r_gale_km": 180.0,
+       "r_storm_km": 60.0,
+       "r_gale_quad_km": {
+        "ne": 190.0,
+        "se": 150.0,
+        "sw": 150.0,
+        "nw": 210.0
+       }
+      },
+      {
+       "tau": 6,
+       "time": "2026-11-10T00:00:00Z",
+       "lat": 25.1,
+       "lon": 138.2,
+       "vmax_kt": 78,
+       "vmax_ms": 40.0,
+       "gust_kt": 97,
+       "pres_hpa": 955.0,
        "r70_km": 40.0,
-       "r_gale_km": 150.0,
-       "r_storm_km": 50.0
+       "r_gale_km": 180.0,
+       "r_storm_km": 60.0
       },
       {
        "tau": 12,
-       "time": "2026-11-10T00:00:00Z",
-       "lat": 25.2,
-       "lon": 138.2,
+       "time": "2026-11-10T06:00:00Z",
+       "lat": 25.6,
+       "lon": 140.0,
        "vmax_kt": 74,
        "vmax_ms": 38.0,
        "gust_kt": 93,
        "pres_hpa": 960.0,
        "r70_km": 50.0,
-       "r_gale_km": 150.0,
-       "r_storm_km": 50.0
+       "r_gale_km": 180.0,
+       "r_storm_km": 60.0
       },
       {
        "tau": 18,
-       "time": "2026-11-10T06:00:00Z",
-       "lat": 25.6,
-       "lon": 139.8,
+       "time": "2026-11-10T12:00:00Z",
+       "lat": 26.1,
+       "lon": 142.3,
        "vmax_kt": 68,
        "vmax_ms": 35.0,
        "gust_kt": 87,
        "pres_hpa": 965.0,
        "r70_km": 80.0,
-       "r_gale_km": 150.0,
-       "r_storm_km": 50.0
+       "r_gale_km": 180.0,
+       "r_storm_km": 60.0
       },
       {
        "tau": 24,
-       "time": "2026-11-10T12:00:00Z",
-       "lat": 26.0,
-       "lon": 141.7,
+       "time": "2026-11-10T18:00:00Z",
+       "lat": 27.0,
+       "lon": 144.5,
        "vmax_kt": 64,
        "vmax_ms": 33.0,
        "gust_kt": 84,
@@ -910,32 +917,100 @@
       },
       {
        "tau": 36,
-       "time": "2026-11-11T00:00:00Z",
-       "lat": 27.1,
-       "lon": 145.7,
-       "vmax_kt": 54,
-       "vmax_ms": 28.0,
-       "gust_kt": 68,
-       "pres_hpa": 980.0,
-       "r70_km": 110.0,
-       "r_gale_km": 150.0,
-       "r_storm_km": null
+       "time": "2026-11-11T06:00:00Z",
+       "lat": 28.8,
+       "lon": 149.8,
+       "vmax_kt": 58,
+       "vmax_ms": 30.0,
+       "gust_kt": 74,
+       "pres_hpa": 975.0,
+       "r70_km": 120.0,
+       "r_gale_km": 120.0,
+       "r_storm_km": 40.0
       },
       {
        "tau": 48,
-       "time": "2026-11-11T12:00:00Z",
-       "lat": 28.2,
-       "lon": 150.0,
-       "vmax_kt": null,
-       "vmax_ms": null,
-       "gust_kt": null,
-       "pres_hpa": 988.0,
+       "time": "2026-11-11T18:00:00Z",
+       "lat": 29.6,
+       "lon": 155.0,
+       "vmax_kt": 49,
+       "vmax_ms": 25.0,
+       "gust_kt": 64,
+       "pres_hpa": 985.0,
        "r70_km": 140.0,
-       "r_gale_km": null,
+       "r_gale_km": 100.0,
        "r_storm_km": null
       }
      ],
      "previous": [
+      {
+       "issued": "2026-11-09T12:00:00Z",
+       "points": [
+        {
+         "tau": 0,
+         "time": "2026-11-09T12:00:00Z",
+         "lat": 24.3,
+         "lon": 135.4,
+         "vmax_kt": 74,
+         "vmax_ms": 38.0,
+         "pres_hpa": 960.0
+        },
+        {
+         "tau": 6,
+         "time": "2026-11-09T18:00:00Z",
+         "lat": 24.8,
+         "lon": 136.6,
+         "vmax_kt": 78,
+         "vmax_ms": 40.0,
+         "pres_hpa": 950.0
+        },
+        {
+         "tau": 12,
+         "time": "2026-11-10T00:00:00Z",
+         "lat": 25.2,
+         "lon": 138.2,
+         "vmax_kt": 74,
+         "vmax_ms": 38.0,
+         "pres_hpa": 960.0
+        },
+        {
+         "tau": 18,
+         "time": "2026-11-10T06:00:00Z",
+         "lat": 25.6,
+         "lon": 139.8,
+         "vmax_kt": 68,
+         "vmax_ms": 35.0,
+         "pres_hpa": 965.0
+        },
+        {
+         "tau": 24,
+         "time": "2026-11-10T12:00:00Z",
+         "lat": 26.0,
+         "lon": 141.7,
+         "vmax_kt": 64,
+         "vmax_ms": 33.0,
+         "pres_hpa": 970.0
+        },
+        {
+         "tau": 36,
+         "time": "2026-11-11T00:00:00Z",
+         "lat": 27.1,
+         "lon": 145.7,
+         "vmax_kt": 54,
+         "vmax_ms": 28.0,
+         "pres_hpa": 980.0
+        },
+        {
+         "tau": 48,
+         "time": "2026-11-11T12:00:00Z",
+         "lat": 28.2,
+         "lon": 150.0,
+         "vmax_kt": null,
+         "vmax_ms": null,
+         "pres_hpa": 988.0
+        }
+       ]
+      },
       {
        "issued": "2026-11-09T06:00:00Z",
        "points": [
@@ -1413,101 +1488,6 @@
          "vmax_kt": null,
          "vmax_ms": null,
          "pres_hpa": 995.0
-        }
-       ]
-      },
-      {
-       "issued": "2026-11-07T18:00:00Z",
-       "points": [
-        {
-         "tau": 0,
-         "time": "2026-11-07T18:00:00Z",
-         "lat": 21.2,
-         "lon": 140.0,
-         "vmax_kt": 54,
-         "vmax_ms": 28.0,
-         "pres_hpa": 985.0
-        },
-        {
-         "tau": 6,
-         "time": "2026-11-08T00:00:00Z",
-         "lat": 21.5,
-         "lon": 138.9,
-         "vmax_kt": 58,
-         "vmax_ms": 30.0,
-         "pres_hpa": 980.0
-        },
-        {
-         "tau": 12,
-         "time": "2026-11-08T06:00:00Z",
-         "lat": 22.0,
-         "lon": 137.5,
-         "vmax_kt": 58,
-         "vmax_ms": 30.0,
-         "pres_hpa": 980.0
-        },
-        {
-         "tau": 18,
-         "time": "2026-11-08T12:00:00Z",
-         "lat": 22.4,
-         "lon": 136.2,
-         "vmax_kt": 64,
-         "vmax_ms": 33.0,
-         "pres_hpa": 975.0
-        },
-        {
-         "tau": 24,
-         "time": "2026-11-08T18:00:00Z",
-         "lat": 22.9,
-         "lon": 135.3,
-         "vmax_kt": 68,
-         "vmax_ms": 35.0,
-         "pres_hpa": 972.0
-        },
-        {
-         "tau": 36,
-         "time": "2026-11-09T06:00:00Z",
-         "lat": 23.7,
-         "lon": 134.7,
-         "vmax_kt": 78,
-         "vmax_ms": 40.0,
-         "pres_hpa": 960.0
-        },
-        {
-         "tau": 48,
-         "time": "2026-11-09T18:00:00Z",
-         "lat": 24.3,
-         "lon": 135.9,
-         "vmax_kt": 78,
-         "vmax_ms": 40.0,
-         "pres_hpa": 960.0
-        },
-        {
-         "tau": 72,
-         "time": "2026-11-10T18:00:00Z",
-         "lat": 25.9,
-         "lon": 142.3,
-         "vmax_kt": 68,
-         "vmax_ms": 35.0,
-         "pres_hpa": 972.0
-        },
-        {
-         "tau": 96,
-         "time": "2026-11-11T18:00:00Z",
-         "lat": 28.0,
-         "lon": 150.8,
-         "vmax_kt": 45,
-         "vmax_ms": 23.0,
-         "pres_hpa": 992.0
-        },
-        {
-         "tau": 120,
-         "time": "2026-11-12T18:00:00Z",
-         "lat": 30.0,
-         "lon": 159.4,
-         "vmax_kt": 29,
-         "vmax_ms": 15.0,
-         "pres_hpa": 1002.0
         }
        ]
       }
@@ -2258,5 +2238,5 @@
    "checked_at": "2026-11-09T18:44:19Z"
   }
  },
- "updated_at": "2026-11-09T19:14:19Z"
+ "updated_at": "2026-11-09T19:44:19Z"
 }
