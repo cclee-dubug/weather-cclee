@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "checked_at": "2026-11-11T04:14:17Z",
+ "checked_at": "2026-11-11T04:44:17Z",
  "sources": {
   "jma": {
    "name": "日本氣象廳",
@@ -9,8 +9,7 @@
   },
   "cwa": {
    "name": "中央氣象署",
-   "status": "error",
-   "message": "URLError: _ssl.c:983: The handshake operation timed out",
+   "status": "ok",
    "count": 1
   },
   "jtwc": {
@@ -1402,8 +1401,7 @@
         }
        ]
       }
-     ],
-     "stale": true
+     ]
     },
     "jtwc": {
      "id": "wp3126",
@@ -1898,5 +1896,5 @@
    "checked_at": "2026-11-11T03:44:19Z"
   }
  },
- "updated_at": "2026-11-11T04:14:17Z"
+ "updated_at": "2026-11-11T04:44:17Z"
 }
