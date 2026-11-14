@@ -1,0 +1,1 @@
+{"schema":3,"products":["shear","dlm400","dlm300","dlm200"],"models":{"gfs":{"name":"NCEP GFS","init":"2026-11-14T06:00:00Z","complete":true,"errors":[],"storms":[],"tries":1},"ifs":{"name":"ECMWF IFS","init":"2026-11-14T00:00:00Z","complete":true,"errors":[],"storms":[],"tries":1}},"updated_at":"2026-11-14T11:28:50Z"}
